@@ -5,6 +5,9 @@ from .models import PoliceOfficer
 from django.shortcuts import render, redirect
 from .forms import ZoneForm, ZoneTypeForm, ZoneAlertForm
 from .models import Zone, ZoneType, ZoneAlert
+from django.http import JsonResponse, Http404
+from django.views.decorators.http import require_GET
+
 
 def register_view(request):
     if request.method == "POST":
@@ -103,7 +106,7 @@ def add_zone(request):
                 )
 
             messages.success(request, "Zone, types and alerts saved successfully.")
-            return redirect("dept:add_zone")
+            return redirect("add_zone")
         else:
             # show errors inline
             messages.error(request, "Please fix the errors below.")
@@ -118,3 +121,61 @@ def add_zone(request):
         "alerts_formset": alerts_formset,
     }
     return render(request, "dept/add_zone.html", context)
+
+
+@require_GET
+def zones_json(request):
+    """
+    Return all zones (id, name, lat, lng, radius, summary fields).
+    """
+    qs = Zone.objects.all()
+    zones = []
+    for z in qs:
+        zones.append({
+            "id": z.id,
+            "name": z.name,
+            "latitude": z.latitude,
+            "longitude": z.longitude,
+            "radius": float(z.radius) if z.radius is not None else None,
+            "types_count": z.zone_types.count(),
+        })
+    return JsonResponse({"zones": zones})
+
+
+
+@require_GET
+def zone_detail_json(request, zone_id):
+    """
+    Return full details for a single zone: zone fields + types + alerts for each type.
+    """
+    try:
+        z = Zone.objects.get(pk=zone_id)
+    except Zone.DoesNotExist:
+        raise Http404("Zone not found")
+
+    types = []
+    for t in z.zone_types.all():
+        alerts = []
+        for a in t.alerts.all():
+            alerts.append({
+                "id": a.id,
+                "start_time": a.start_time.strftime("%H:%M"),
+                "end_time": a.end_time.strftime("%H:%M"),
+                "risk_points": a.risk_points,
+            })
+        types.append({
+            "id": t.id,
+            "name": t.name,
+            "description": t.description,
+            "alerts": alerts
+        })
+
+    payload = {
+        "id": z.id,
+        "name": z.name,
+        "latitude": z.latitude,
+        "longitude": z.longitude,
+        "radius": float(z.radius) if z.radius is not None else None,
+        "types": types,
+    }
+    return JsonResponse(payload)

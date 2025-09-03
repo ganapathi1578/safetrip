@@ -41,7 +41,7 @@ class ZoneType(models.Model):
     # NOTE: ZoneType is now tied to a particular Zone (hierarchical)
     zone = models.ForeignKey(Zone, on_delete=models.CASCADE, related_name="zone_types")
     name = models.CharField(max_length=100)  # e.g., "Crime", "Flood", "Landslide"
-    description = models.TextField(blank=True, null=True)
+    #description = models.TextField(blank=True, null=True)
 
     class Meta:
         # same type name can exist across different zones but keep unique per-zone

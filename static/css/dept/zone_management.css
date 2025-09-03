@@ -1,0 +1,227 @@
+/* Zone Management Styles */
+.zone-management {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.zone-list {
+    background: #f8fafc;
+    border-radius: 8px;
+    padding: 20px;
+}
+
+.zone-item {
+    background: white;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.zone-info h4 {
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+}
+
+.zone-info h4 .zone-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 8px;
+}
+
+.zone-info h4 .restricted {
+    background-color: var(--danger);
+}
+
+.zone-info h4 .safe {
+    background-color: var(--success);
+}
+
+.zone-info h4 .warning {
+    background-color: var(--warning);
+}
+
+.zone-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.zone-actions button {
+    padding: 5px 10px;
+    font-size: 12px;
+}
+
+.zone-form {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+    color: var(--dark);
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.form-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+
+/* Drawing controls */
+.leaflet-draw-toolbar {
+    margin-top: 12px;
+}
+
+.leaflet-draw-toolbar a {
+    background-color: white;
+    border: 1px solid #ccc;
+}
+
+/* Zone drawing styles */
+.zone-drawing {
+    border: 2px dashed var(--primary);
+}
+
+/* Zone Management Styles */
+.zone-management {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.zone-list {
+    background: #f8fafc;
+    border-radius: 8px;
+    padding: 20px;
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.zone-item {
+    background: white;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.zone-info h4 {
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+}
+
+.zone-info h4 .zone-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 8px;
+}
+
+.zone-info h4 .restricted {
+    background-color: var(--danger);
+}
+
+.zone-info h4 .safe {
+    background-color: var(--success);
+}
+
+.zone-info h4 .warning {
+    background-color: var(--warning);
+}
+
+.zone-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.zone-actions button {
+    padding: 5px 10px;
+    font-size: 12px;
+}
+
+.zone-form {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+    color: var(--dark);
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.form-group input[type="range"] {
+    width: calc(100% - 50px);
+    margin-right: 10px;
+}
+
+.coordinate-display {
+    background: #f1f5f9;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 15px;
+    font-family: monospace;
+}
+
+.form-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+
+/* Drawing controls */
+.leaflet-draw-toolbar {
+    margin-top: 12px;
+}
+
+.leaflet-draw-toolbar a {
+    background-color: white;
+    border: 1px solid #ccc;
+}

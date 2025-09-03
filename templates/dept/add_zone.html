@@ -1,208 +1,419 @@
 {% load static %}
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Add Zone (hierarchical)</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Add Zone — SafeTour</title>
+
+  <!-- Leaflet + Draw CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    .container { max-width: 1000px; margin: 0 auto; }
-    .card { border: 1px solid #ddd; padding: 12px; border-radius: 6px; margin-bottom: 12px; }
-    .type-block { background: #fafafa; padding: 8px; margin-bottom: 8px; border-radius: 6px; }
-    .alerts-list { margin-left: 18px; margin-top:8px; }
-    .alert-row { margin-bottom:6px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-    .alert-row input[type="time"], .alert-row input[type="number"] { padding:4px; }
-    button.add { margin-left:8px; }
-    label { display:block; margin-top:6px; }
-    .small { font-size: 0.9em; color: #555; }
-    .remove-btn { background:#ffdddd; border:1px solid #d66; padding:4px 8px; cursor:pointer; border-radius:4px; }
-    .add-btn { background:#ddffdd; border:1px solid #6d6; padding:4px 8px; cursor:pointer; border-radius:4px; }
+    :root { --gap: 14px; --panel-bg: #fff; --muted: #666; }
+    body { font-family: Inter, system-ui, Arial; margin: 0; padding: 18px; background:#f6f7fb; color:#222; }
+    .page { max-width: 1200px; margin: 0 auto; }
+    .title { margin-bottom: 12px; }
+    .layout {
+  display: flex;
+  gap: var(--gap);
+  align-items: flex-start;
+}
+
+.layout > div:first-child {
+  flex: 3; /* 3 parts */
+}
+
+.layout > div:last-child {
+  flex: 1; /* 1 part */
+}
+    .map-col { flex: 2 1 0; min-height: 620px; }
+    .form-col { flex: 1 1 360px; background: var(--panel-bg); border: 1px solid #e6e9ef; border-radius:8px; padding: 16px; box-shadow: 0 4px 10px rgba(20,20,40,0.03); max-height: 720px; overflow:auto; }
+    #map { width:100%; height: 640px; border-radius:8px; border:1px solid #ddd; }
+    h1 { font-size: 20px; margin:0 0 6px 0; }
+    h2 { margin: 12px 0; font-size: 16px; }
+    .small { font-size: 0.9rem; color: var(--muted); }
+    .form-row { margin-bottom: 10px; }
+    label { display:block; font-weight:600; margin-bottom:6px; font-size:0.95rem; }
+    input[type="text"], input[type="number"], textarea, select, input[type="datetime-local"], input[type="time"] {
+      width:100%; padding:8px 10px; border-radius:6px; border:1px solid #d6d9e6; font-size:0.95rem;
+    }
+    textarea { min-height: 80px; resize: vertical; }
+    .btn { display:inline-block; padding:8px 12px; border-radius:6px; border:1px solid #2b6cb0; background:#2b6cb0; color:#fff; cursor:pointer; text-decoration:none; }
+    .btn-outline { background: transparent; color:#2b6cb0; border-color:#2b6cb0; }
+    .card { background:#fff; padding:10px; border-radius:6px; border:1px solid #eee; margin-bottom:10px; }
+    .type-block, .alert-row { border:1px solid #f0f0f0; padding:8px; border-radius:6px; margin-bottom:8px; background:#fbfcff; }
+    .controls { display:flex; gap:8px; margin-top:8px; align-items:center; flex-wrap:wrap; }
+    .coords { font-family: monospace; color:#1f2937; background:#f5f7fa; padding:6px 8px; border-radius:6px; display:inline-block; }
+    .muted { color:#777; font-size:0.9rem; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Add Zone (Zone → ZoneTypes → ZoneAlerts)</h1>
+  <div class="page">
+    <div class="title">
+      <h1>Add Zone (Zone → ZoneTypes → ZoneAlerts)</h1>
+      <p class="small">Click on map to drop a pin, or draw a circle/polygon. The form on the right will be auto-filled.</p>
+    </div>
 
-    <form method="post" id="zone-form">
-      {% csrf_token %}
-
-      <div class="card">
-        <h3>Zone</h3>
-        {{ zone_form.as_p }}
-      </div>
-
-      <div class="card">
-        <h3>Zone Types
-          <button type="button" id="add-type" class="add-btn">+ Add Type</button>
-        </h3>
-
-        <div id="types-area">
-          {{ types_formset.management_form }}
-          {% for form in types_formset.forms %}
-            <div class="type-block" data-type-index="{{ forloop.counter0 }}">
-              <strong>Type #{{ forloop.counter }}</strong>
-              <div>
-                {{ form.name.label_tag }} {{ form.name }}
-              </div>
-              <div>
-                {{ form.description.label_tag }} {{ form.description }}
-              </div>
-
-              <div class="alerts-list" id="alerts-for-type-{{ forloop.counter0 }}">
-                <h4>Alerts
-                  <button type="button" class="add-alert add-btn" data-type-index="{{ forloop.counter0 }}">+ Add Alert</button>
-                </h4>
-                <!-- if you want to render initial alert forms (edit mode) you can put them here -->
-              </div>
-            </div>
-          {% endfor %}
+    <div class="layout">
+      <!-- MAP (left 2/3) -->
+      <div class="map-col">
+        <div id="map"></div>
+        <div style="margin-top:8px;" class="controls">
+          <button id="clearMapBtn" class="btn btn-outline">Clear</button>
+          <button id="locateBtn" class="btn btn-outline">Use my location</button>
+          <span class="muted"> • Draw modes: Marker / Circle / Polygon</span>
         </div>
-
       </div>
 
-      <!-- Alerts formset management (hidden) -->
-      <div id="alerts-area" style="display:none;">
-        {{ alerts_formset.management_form }}
-      </div>
+      <!-- FORM (right 1/3) -->
+      <div class="form-col">
+        <form method="post" id="zone-form" novalidate>
+          {% csrf_token %}
+          <div class="card">
+            <h2>Zone</h2>
+            <!-- zone_form uses prefix "zone" in your view; Django will render name="zone-latitude" etc -->
+            {{ zone_form.as_p }}
+            <!-- Show preview coordinates -->
+            <div class="form-row">
+              <label>Coordinates preview</label>
+              <div id="coordsPreview" class="coords">—</div>
+            </div>
+            <div class="form-row">
+              <label>Map radius preview (m)</label>
+              <div id="radiusPreview" class="coords">—</div>
+            </div>
+          </div>
 
-      <button type="submit">Save Zone + Types + Alerts</button>
-    </form>
+          <div class="card">
+            <h2>Zone Types
+              <button type="button" id="add-type" class="btn btn-outline" style="float:right">+ Add Type</button>
+            </h2>
+
+            <div id="types-area">
+              {{ types_formset.management_form }}
+              {% for form in types_formset.forms %}
+                <div class="type-block" data-type-index="{{ forloop.counter0 }}">
+                  <strong>Type #{{ forloop.counter }}</strong>
+                  <div style="margin-top:6px;">
+                    {{ form.name.label_tag }} {{ form.name }}
+                  </div>
+                  <div style="margin-top:6px;">
+                    {{ form.description.label_tag }} {{ form.description }}
+                  </div>
+
+                  <div class="alerts-list" id="alerts-for-type-{{ forloop.counter0 }}">
+                    <h4>Alerts
+                      <button type="button" class="add-alert btn btn-outline" data-type-index="{{ forloop.counter0 }}" style="float:right">+ Add Alert</button>
+                    </h4>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+
+          <!-- hidden alerts management -->
+          <div id="alerts-area" style="display:none;">
+            {{ alerts_formset.management_form }}
+          </div>
+
+          <div style="margin-top:12px; text-align:right;">
+            <button type="submit" class="btn">Save Zone + Types + Alerts</button>
+          </div>
+        </form>
+        <!-- inside .form-col, below the form -->
+        <div id="zoneInfo" class="card" style="display:none; margin-top:12px;">
+        <h2 id="zoneInfoTitle">Zone details</h2>
+        <div id="zoneInfoBody" style="font-size:0.95rem; color:#222;">
+            <!-- filled dynamically -->
+        </div>
+        <div style="margin-top:8px; text-align:right;">
+            <button id="closeZoneInfoBtn" class="btn btn-outline">Close</button>
+        </div>
+</div>
+
+      </div>
+    </div>
   </div>
 
-<script>
-(function(){
-  // Prefill prefixes from Django formsets (rendered into template)
-  const typesPrefix = "{{ types_formset.prefix }}";   // e.g., "types"
-  const alertsPrefix = "{{ alerts_formset.prefix }}"; // e.g., "alerts"
+  <!-- Leaflet + draw + dependencies -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 
-  const typesArea = document.getElementById('types-area');
-  const addTypeBtn = document.getElementById('add-type');
-  const alertsArea = document.getElementById('alerts-area');
+  <script>
+  (function () {
+    // ------- DOM shortcuts & form fields -------
+    const latField = document.querySelector('input[name="zone-latitude"]');
+    const lngField = document.querySelector('input[name="zone-longitude"]');
+    const radiusField = document.querySelector('input[name="zone-radius"]');
+    const coordsPreview = document.getElementById('coordsPreview');
+    const radiusPreview = document.getElementById('radiusPreview');
 
-  // helper to find formset management inputs
-  function getInput(name) { return document.querySelector('[name="'+name+'"]'); }
-  function setInput(name, val){ const el = getInput(name); if(el) el.value = val; }
-  function getTotalForms(prefix){ const el = getInput(prefix + '-TOTAL_FORMS'); return el ? parseInt(el.value || '0', 10) : 0; }
+    // ------- init map -------
+    const map = L.map('map').setView([23.7272, 92.7173], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
 
-  // Create a new ZoneType block (client-side)
-  function createTypeBlock(index){
-    const wrapper = document.createElement('div');
-    wrapper.className = 'type-block';
-    wrapper.setAttribute('data-type-index', index);
+    // feature group to hold a single user-drawn geometry
+    const drawnFG = new L.FeatureGroup().addTo(map);
+    let currentLayer = null;
 
-    // build inner html with proper form input names for types formset
-    wrapper.innerHTML = `
-      <strong>Type #${index + 1}</strong>
-      <div>
-        <label for="id_${typesPrefix}-${index}-name">Name:</label>
-        <input type="text" name="${typesPrefix}-${index}-name" id="id_${typesPrefix}-${index}-name" />
-        <input type="hidden" name="${typesPrefix}-${index}-DELETE" value="" />
-      </div>
-      <div>
-        <label for="id_${typesPrefix}-${index}-description">Description:</label>
-        <textarea name="${typesPrefix}-${index}-description" id="id_${typesPrefix}-${index}-description" rows="2"></textarea>
-      </div>
+    // Draw control — allow marker, circle, polygon
+    const drawControl = new L.Control.Draw({
+      draw: {
+        polyline: false,
+        rectangle: false,
+        circlemarker: false,
+        marker: true,
+        circle: { showRadius: true },
+        polygon: { allowIntersection: false, showArea: true }
+      },
+      edit: {
+        featureGroup: drawnFG,
+        edit: true,
+        remove: true
+      }
+    });
+    map.addControl(drawControl);
 
-      <div class="alerts-list" id="alerts-for-type-${index}">
-        <h4>Alerts
-          <button type="button" class="add-alert add-btn" data-type-index="${index}">+ Add Alert</button>
-        </h4>
-      </div>
-    `;
-    return wrapper;
-  }
+    // helper to set values into form fields (name-based)
+    function setZoneFields(lat, lng, radius) {
+      if (latField) latField.value = (lat === '' ? '' : Number(lat).toFixed(6));
+      if (lngField) lngField.value = (lng === '' ? '' : Number(lng).toFixed(6));
+      if (radiusField) radiusField.value = (radius === '' ? '' : String(radius));
+      coordsPreview.textContent = (lat && lng) ? `${Number(lat).toFixed(6)}, ${Number(lng).toFixed(6)}` : '—';
+      radiusPreview.textContent = radius ? `${radius} m` : '—';
+    }
 
-  // Create an alert input row (these inputs are part of the alerts formset names)
-  function createAlertRow(globalIndex, typeIndex){
-    const row = document.createElement('div');
-    row.className = 'alert-row';
-    row.setAttribute('data-alert-index', globalIndex);
+    // compute polygon centroid (simple average) — fine for UI preview
+    function polygonCentroid(latlngs) {
+      let sx = 0, sy = 0, n = 0;
+      latlngs.forEach(p => { sx += p.lat; sy += p.lng; n++; });
+      return { lat: sx / n, lng: sy / n };
+    }
 
-    // inputs must have names alerts-<i>-field to be understood by Django formset
-    row.innerHTML = `
-      <label>Start:</label>
-      <input type="time" name="${alertsPrefix}-${globalIndex}-start_time" required />
-      <label>End:</label>
-      <input type="time" name="${alertsPrefix}-${globalIndex}-end_time" required />
-      <label>Risk:</label>
-      <input type="number" name="${alertsPrefix}-${globalIndex}-risk_points" min="0" max="100" required />
-      <input type="hidden" name="${alertsPrefix}-${globalIndex}-type_index" value="${typeIndex}" />
-      <input type="hidden" name="${alertsPrefix}-${globalIndex}-DELETE" value="" />
-      <button type="button" class="remove-alert remove-btn">Remove</button>
-    `;
-    return row;
-  }
+    // update form from a Leaflet layer
+    function updateFromLayer(layer, layerType) {
+      if (!layer) { setZoneFields('', '', ''); return; }
+      if (layerType === 'circle' || layer instanceof L.Circle) {
+        const c = layer.getLatLng();
+        const r = Math.round(layer.getRadius());
+        setZoneFields(c.lat, c.lng, r);
+      } else if (layerType === 'polygon' || layer instanceof L.Polygon) {
+        let latlngs = layer.getLatLngs();
+        if (Array.isArray(latlngs[0])) latlngs = latlngs[0]; // ring
+        const ctr = polygonCentroid(latlngs);
+        setZoneFields(ctr.lat, ctr.lng, '');
+        // if you want to save polygon points, you can add a hidden input named 'zone-polygon_points'
+        // and set its value here as "lat1 lng1;lat2 lng2;..."
+        const polyField = document.querySelector('input[name="zone-polygon_points"], textarea[name="zone-polygon_points"]');
+        if (polyField) {
+          const pts = latlngs.map(p => `${p.lat.toFixed(6)} ${p.lng.toFixed(6)}`).join(';');
+          polyField.value = pts;
+        }
+      } else { // marker
+        const c = layer.getLatLng();
+        setZoneFields(c.lat, c.lng, '');
+      }
+    }
 
-  // Add-type button handler
-  addTypeBtn.addEventListener('click', function(){
-    let totalTypes = getTotalForms(typesPrefix);
-    const newBlock = createTypeBlock(totalTypes);
-    typesArea.appendChild(newBlock);
-    // bump types TOTAL_FORMS
-    setInput(typesPrefix + '-TOTAL_FORMS', totalTypes + 1);
-  });
+    // handle click on map to put a marker (single)
+    map.on('click', function (e) {
+      if (currentLayer) { drawnFG.removeLayer(currentLayer); currentLayer = null; }
+      const marker = L.marker(e.latlng);
+      currentLayer = marker;
+      drawnFG.addLayer(marker);
+      updateFromLayer(marker, 'marker');
+    });
 
-  // Delegate clicks for add-alert and remove-alert
-  document.addEventListener('click', function(e){
-    // add alert under a type
-    if (e.target && e.target.matches('.add-alert')) {
-      const typeIndex = e.target.getAttribute('data-type-index');
-      // create new alert row
-      let alertsTotal = getTotalForms(alertsPrefix);
-      const alertRow = createAlertRow(alertsTotal, typeIndex);
+    // when a draw is created (marker/circle/polygon)
+    map.on(L.Draw.Event.CREATED, function (e) {
+      if (currentLayer) { drawnFG.removeLayer(currentLayer); currentLayer = null; }
+      const layer = e.layer;
+      currentLayer = layer;
+      drawnFG.addLayer(layer);
+      updateFromLayer(layer, e.layerType);
+    });
 
-      // append alertRow visually under corresponding type block's alerts-list
-      const list = document.getElementById('alerts-for-type-' + typeIndex);
-      if (list) {
-        list.appendChild(alertRow);
-      } else {
-        // fallback: append to alerts-area
-        alertsArea.appendChild(alertRow);
+    // when layer edited
+    map.on('draw:edited', function (e) {
+      e.layers.eachLayer(function (layer) {
+        currentLayer = layer;
+        updateFromLayer(layer, layer instanceof L.Circle ? 'circle' : (layer instanceof L.Marker ? 'marker' : 'polygon'));
+      });
+    });
+
+    // when deleted (clear)
+    map.on('draw:deleted', function () {
+      drawnFG.clearLayers();
+      currentLayer = null;
+      setZoneFields('', '', '');
+    });
+
+    // Clear button
+    document.getElementById('clearMapBtn').addEventListener('click', function () {
+      drawnFG.clearLayers();
+      currentLayer = null;
+      setZoneFields('', '', '');
+    });
+
+    // Use my location
+    document.getElementById('locateBtn').addEventListener('click', function () {
+      if (!navigator.geolocation) { alert('Geolocation not available'); return; }
+      navigator.geolocation.getCurrentPosition(function (pos) {
+        const lat = pos.coords.latitude, lng = pos.coords.longitude;
+        if (currentLayer) drawnFG.removeLayer(currentLayer);
+        const mk = L.marker([lat, lng]).addTo(drawnFG);
+        currentLayer = mk;
+        map.setView([lat, lng], 14);
+        updateFromLayer(mk, 'marker');
+      }, function (err) {
+        alert('Unable to access location: ' + err.message);
+      });
+    });
+
+    // ----- if the zone inputs contain initial values (edit mode), show them on map -----
+    (function prefill() {
+      try {
+        const lat = parseFloat(latField ? latField.value : '');
+        const lng = parseFloat(lngField ? lngField.value : '');
+        const rad = radiusField ? radiusField.value : '';
+        if (!isNaN(lat) && !isNaN(lng)) {
+          let layer;
+          if (rad && String(rad).trim() !== '') {
+            layer = L.circle([lat, lng], { radius: parseFloat(rad) });
+          } else {
+            layer = L.marker([lat, lng]);
+          }
+          currentLayer = layer;
+          drawnFG.addLayer(layer);
+          map.setView([lat, lng], 13);
+          updateFromLayer(layer, layer instanceof L.Circle ? 'circle' : 'marker');
+        }
+      } catch (err) { /* ignore */ }
+    })();
+
+    // ---------------------------
+    // Dynamic formset JS for Types + Alerts (your code integrated)
+    // ---------------------------
+    (function () {
+      const typesPrefix = "{{ types_formset.prefix }}";   // e.g., "types"
+      const alertsPrefix = "{{ alerts_formset.prefix }}"; // e.g., "alerts"
+
+      const typesArea = document.getElementById('types-area');
+      const addTypeBtn = document.getElementById('add-type');
+      const alertsArea = document.getElementById('alerts-area');
+
+      function getInput(name) { return document.querySelector('[name="'+name+'"]'); }
+      function setInput(name, val){ const el = getInput(name); if(el) el.value = val; }
+      function getTotalForms(prefix){ const el = getInput(prefix + '-TOTAL_FORMS'); return el ? parseInt(el.value || '0', 10) : 0; }
+
+      function createTypeBlock(index){
+        const wrapper = document.createElement('div');
+        wrapper.className = 'type-block';
+        wrapper.setAttribute('data-type-index', index);
+        wrapper.innerHTML = `
+          <strong>Type #${index + 1}</strong>
+          <div style="margin-top:6px;">
+            <label for="id_${typesPrefix}-${index}-name">Name:</label>
+            <input type="text" name="${typesPrefix}-${index}-name" id="id_${typesPrefix}-${index}-name" />
+            <input type="hidden" name="${typesPrefix}-${index}-DELETE" value="" />
+          </div>
+          <div style="margin-top:6px;">
+            <label for="id_${typesPrefix}-${index}-description">Description:</label>
+            <textarea name="${typesPrefix}-${index}-description" id="id_${typesPrefix}-${index}-description" rows="2"></textarea>
+          </div>
+
+          <div class="alerts-list" id="alerts-for-type-${index}">
+            <h4>Alerts
+              <button type="button" class="add-alert btn btn-outline" data-type-index="${index}" style="float:right">+ Add Alert</button>
+            </h4>
+          </div>
+        `;
+        return wrapper;
       }
 
-      // increment TOTAL_FORMS for alerts formset
-      setInput(alertsPrefix + '-TOTAL_FORMS', alertsTotal + 1);
-    }
+      function createAlertRow(globalIndex, typeIndex){
+        const row = document.createElement('div');
+        row.className = 'alert-row';
+        row.setAttribute('data-alert-index', globalIndex);
 
-    // remove alert row (mark DELETE and hide)
-    if (e.target && e.target.matches('.remove-alert')) {
-      const row = e.target.closest('.alert-row');
-      if (!row) return;
-      // set DELETE hidden input to 'on' and hide the row
-      const deleteInput = row.querySelector('input[name$="-DELETE"]');
-      if (deleteInput) deleteInput.value = 'on';
-      row.style.display = 'none';
-    }
-  });
+        row.innerHTML = `
+          <label>Start:</label>
+          <input type="time" name="${alertsPrefix}-${globalIndex}-start_time" required />
+          <label>End:</label>
+          <input type="time" name="${alertsPrefix}-${globalIndex}-end_time" required />
+          <label>Risk:</label>
+          <input type="number" name="${alertsPrefix}-${globalIndex}-risk_points" min="0" max="100" required />
+          <input type="hidden" name="${alertsPrefix}-${globalIndex}-type_index" value="${typeIndex}" />
+          <input type="hidden" name="${alertsPrefix}-${globalIndex}-DELETE" value="" />
+          <button type="button" class="remove-alert remove-btn btn btn-outline">Remove</button>
+        `;
+        return row;
+      }
 
-  // Ensure management forms exist (in case upstream didn't render)
-  document.addEventListener('DOMContentLoaded', function(){
-    // types management
-    if (!getInput(typesPrefix + '-TOTAL_FORMS')) {
-      const fields = ['TOTAL_FORMS','INITIAL_FORMS','MIN_NUM_FORMS','MAX_NUM_FORMS'];
-      fields.forEach(f => {
-        const el = document.createElement('input');
-        el.type = 'hidden';
-        el.name = `${typesPrefix}-${f}`;
-        el.value = (f === 'TOTAL_FORMS' ? '0' : '0');
-        typesArea.insertBefore(el, typesArea.firstChild);
+      if (addTypeBtn) {
+        addTypeBtn.addEventListener('click', function(){
+          let totalTypes = getTotalForms(typesPrefix);
+          const newBlock = createTypeBlock(totalTypes);
+          typesArea.appendChild(newBlock);
+          setInput(typesPrefix + '-TOTAL_FORMS', totalTypes + 1);
+        });
+      }
+
+      document.addEventListener('click', function(e){
+        if (e.target && e.target.matches('.add-alert')) {
+          const typeIndex = e.target.getAttribute('data-type-index');
+          let alertsTotal = getTotalForms(alertsPrefix);
+          const alertRow = createAlertRow(alertsTotal, typeIndex);
+          const list = document.getElementById('alerts-for-type-' + typeIndex);
+          if (list) {
+            list.appendChild(alertRow);
+          } else {
+            alertsArea.appendChild(alertRow);
+          }
+          setInput(alertsPrefix + '-TOTAL_FORMS', alertsTotal + 1);
+        }
+
+        if (e.target && e.target.matches('.remove-alert')) {
+          const row = e.target.closest('.alert-row');
+          if (!row) return;
+          const deleteInput = row.querySelector('input[name$="-DELETE"]');
+          if (deleteInput) deleteInput.value = 'on';
+          row.style.display = 'none';
+        }
       });
-    }
 
-    // alerts management
-    if (!getInput(alertsPrefix + '-TOTAL_FORMS')) {
-      const fields = ['TOTAL_FORMS','INITIAL_FORMS','MIN_NUM_FORMS','MAX_NUM_FORMS'];
-      fields.forEach(f => {
-        const el = document.createElement('input');
-        el.type = 'hidden';
-        el.name = `${alertsPrefix}-${f}`;
-        el.value = (f === 'TOTAL_FORMS' ? '0' : '0');
-        alertsArea.insertBefore(el, alertsArea.firstChild);
+      document.addEventListener('DOMContentLoaded', function(){
+        if (!getInput(typesPrefix + '-TOTAL_FORMS')) {
+          const fields = ['TOTAL_FORMS','INITIAL_FORMS','MIN_NUM_FORMS','MAX_NUM_FORMS'];
+          fields.forEach(f => {
+            const el = document.createElement('input');
+            el.type = 'hidden';
+            el.name = `${typesPrefix}-${f}`;
+            el.value = (f === 'TOTAL_FORMS' ? '0' : '0');
+            typesArea.insertBefore(el, typesArea.firstChild);
+          });
+        }
+        if (!getInput(alertsPrefix + '-TOTAL_FORMS')) {
+          const fields = ['TOTAL_FORMS','INITIAL_FORMS','MIN_NUM_FORMS','MAX_NUM_FORMS'];
+          fields.forEach(f => {
+            const el = document.createElement('input');
+            el.type = 'hidden';
+            el.name = `${alertsPrefix}-${f}`;
+            el.value = (f === 'TOTAL_FORMS' ? '0' : '0');
+            alertsArea.insertBefore(el, alertsArea.firstChild);
+          });
+        }
       });
-    }
-  });
+    })();
 
-})();
-</script>
+    // ---- end main IIFE ----
+  })();
+  
+  </script>
 </body>
 </html>

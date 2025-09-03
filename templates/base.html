@@ -1,18 +1,125 @@
-<!DOCTYPE html>
+{# templates/base.html #}
 {% load static %}
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>{% block title %}Police System{% endblock %}</title>
-  <link rel="stylesheet" href="{% static 'css/style.css' %}">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>{% block title %}SafeTour - Police Dashboard{% endblock %}</title>
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+
+  <!-- Project CSS (served via django static) -->
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}" />
+  <link rel="stylesheet" href="{% static 'css/zone_management.css' %}" />
+
+  {% block extra_css %}{% endblock %}
 </head>
 <body>
-  <nav>
-    <a href="{% url 'home' %}">Home</a> |
-    <a href="{% url 'register' %}">Register</a> |
-    <a href="{% url 'login' %}">Login</a>
-  </nav>
-  <hr>
-  {% block content %}{% endblock %}
+  <!-- Sidebar (minimal shell — child templates may override or add content into this area) -->
+  <aside class="sidebar">
+    <div class="logo">
+      <i class="fas fa-map-marker-alt"></i>
+      <span class="logo-text">SafeTour Police</span>
+    </div>
+
+    {% comment %} <ul class="sidebar-menu">
+      <li><a href="{% url 'dashboard' %}" class="active"><i class="fas fa-home"></i> <span>Dashboard</span></a></li>
+      <li><a href="{% url 'live_map' %}"><i class="fas fa-map"></i> <span>Live Map</span></a></li>
+      <li><a href="{% url 'tourists' %}"><i class="fas fa-users"></i> <span>Tourists</span></a></li>
+      <li><a href="{% url 'alerts' %}"><i class="fas fa-exclamation-triangle"></i> <span>Alerts</span></a></li> {% endcomment %}
+      <li><a href="{% url 'add_zone' %}" id="zoneManagementBtn"><i class="fas fa-draw-polygon"></i> <span>Zone Management</span></a></li>
+      {% comment %} <li><a href="{% url 'analytics' %}"><i class="fas fa-chart-bar"></i> <span>Analytics</span></a></li>
+      <li><a href="{% url 'settings' %}"><i class="fas fa-cog"></i> <span>Settings</span></a></li>
+      <li><a href="{% url 'logout' %}"><i class="fas fa-sign-out-alt"></i> <span>Logout</span></a></li> {% endcomment %}
+    </ul>
+  </aside>
+
+  <!-- Main content area — child templates must provide content in this block -->
+  <main class="main-content">
+    {% block header %}
+    <!-- default header (child templates may override) -->
+    <div class="header">
+      <div class="page-title">
+        <h1>Tourist Safety Monitoring Dashboard</h1>
+        <p>Aizawl City, Mizoram</p>
+      </div>
+      <div class="user-info">
+        <i class="fas fa-user-shield"></i>
+        <div>
+          <div>Officer Lalrinmawia</div>
+          <div style="font-size:12px;color:var(--gray);">Aizawl Police Department</div>
+          {% comment %} <a href="{% url 'profile' %}">View Profile</a> {% endcomment %}
+        </div>
+      </div>
+    </div>
+    {% endblock %}
+
+    {% block content %}
+    <!-- Child templates: put dashboard content (map container, stats cards, alerts, etc.) here. -->
+    {% endblock %}
+  </main>
+
+  <!-- Modal placeholders (kept minimal) -->
+  <div class="modal" id="touristModal" style="display:none;">
+    <div class="modal-content" id="touristModalContent">
+      <!-- loaded dynamically -->
+    </div>
+  </div>
+
+  <div class="modal" id="zoneModal" style="display:none;">
+    <div class="modal-content" id="zoneModalContent">
+      <!-- zone-management UI or a Django-rendered form will be injected here -->
+      <!-- you can include a default small header for accessibility -->
+      <div class="modal-header">
+        <h2>Zone Management</h2>
+        <button class="close-modal" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- default: child template or AJAX will fill this -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaflet + Draw JS (CDN) -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+
+  <!-- Project JS -->
+  <script src="{% static 'javascript/dashborad.js' %}"></script>
+  <script src="{% static 'javascript/zone_management.js' %}"></script>
+
+  {% block extra_js %}
+  <!-- Example minimal bootstrap for modals and CSRF helper for AJAX (override as needed) -->
+  <script>
+    // simple modal open/close (pages can trigger by toggling display)
+    document.addEventListener('click', function(e){
+      if (e.target.matches('#zoneManagementBtn')) {
+        // child pages can choose to load HTML into #zoneModalContent via fetch
+        document.getElementById('zoneModal').style.display = 'block';
+        document.body.style.overflow = 'hidden';
+      }
+      if (e.target.matches('.close-modal') || e.target.matches('#cancelZoneBtn')) {
+        const modal = e.target.closest('.modal');
+        if (modal) { modal.style.display = 'none'; document.body.style.overflow = ''; }
+      }
+    });
+
+    // small helper to get csrftoken cookie for AJAX POSTs
+    function getCookie(name) {
+      const cookieArr = document.cookie.split(';').map(c => c.trim());
+      for (const c of cookieArr) {
+        if (c.startsWith(name + '=')) return decodeURIComponent(c.split('=')[1]);
+      }
+      return null;
+    }
+    window.getCSRF = () => getCookie('csrftoken');
+  </script>
+  {% endblock %}
 </body>
 </html>
