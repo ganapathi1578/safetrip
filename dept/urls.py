@@ -9,4 +9,8 @@ urlpatterns = [
     path("zones/add/", views.add_zone, name="add_zone"),
     path("zones_json/", views.zones_json, name="zones_json"),
     path("zone_detail/<int:zone_id>/", views.zone_detail_json, name="zone_detail_json"),
+    path("map/", views.safetour_map, name="safetour_map"),
+    path("api/filter_options/", views.api_filter_options, name="api_filter_options"),
+    path("api/alerts/", views.api_alerts, name="api_alerts"),
+    path("api/tourists/latest/", views.api_tourists_latest, name="api_tourists_latest"),
 ]

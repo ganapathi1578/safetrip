@@ -85,8 +85,7 @@ def add_zone(request):
                 if not tform or tform.get("DELETE", False):
                     continue
                 name = tform.get("name")
-                description = tform.get("description")
-                zt = ZoneType.objects.create(zone=zone, name=name, description=description)
+                zt = ZoneType.objects.create(zone=zone, name=name)
                 type_map[idx] = zt
 
             # 3) Create alerts linked to the right ZoneType based on type_index
@@ -166,7 +165,6 @@ def zone_detail_json(request, zone_id):
         types.append({
             "id": t.id,
             "name": t.name,
-            "description": t.description,
             "alerts": alerts
         })
 
@@ -179,3 +177,158 @@ def zone_detail_json(request, zone_id):
         "types": types,
     }
     return JsonResponse(payload)
+
+
+
+
+######
+from django.http import JsonResponse
+from django.shortcuts import render
+from django.utils import timezone
+from django.db.models import OuterRef, Subquery, Max
+from django.db.models.functions import Cast
+from django.db.models import TimeField
+
+from .models import Zone, ZoneType, ZoneAlert
+from tourist.models import Tourist, TouristLocation
+
+import datetime
+
+# Utility to parse HH:MM time strings
+def parse_time_str(tstr):
+    try:
+        return datetime.datetime.strptime(tstr, "%H:%M").time()
+    except Exception:
+        return None
+
+
+def safetour_map(request):
+    # Renders the HTML template — map + controls
+    return render(request, "dept/home.html")
+
+
+def api_filter_options(request):
+    """Return available filter options: zone_types and distinct alert time windows.
+    JSON structure:
+    {"zone_types": [{"id":.., "name":.., "zone_id":.., "zone_name":..}],
+     "time_windows": [{"start_time":"HH:MM", "end_time":"HH:MM"}] }
+    """
+    zone_types_qs = ZoneType.objects.select_related("zone").all()
+    zone_types = [
+        {"id": zt.id, "name": zt.name, "zone_id": zt.zone.id, "zone_name": zt.zone.name}
+        for zt in zone_types_qs
+    ]
+
+    # List distinct time windows from ZoneAlert
+    tw_qs = ZoneAlert.objects.values("start_time", "end_time").distinct()
+    time_windows = [
+        {"start_time": t["start_time"].strftime("%H:%M"), "end_time": t["end_time"].strftime("%H:%M")} for t in tw_qs
+    ]
+
+    return JsonResponse({"zone_types": zone_types, "time_windows": time_windows})
+
+
+def api_alerts(request):
+    """Return alerts filtered by zone_type ids and time filters.
+
+    Query params (GET):
+      - zone_type_ids: comma-separated ids (optional)
+      - mode: 'current'|'all'|'custom' (default 'current')
+      - start_time, end_time : used when mode=custom (format HH:MM)
+      - include_latest_tourists: '1' or '0' (optional) — if set, the response will include a `latest_tourists` list
+
+    Response structure:
+      {"alerts": [ {id, zone_type: {id,name}, zone: {id,name,lat,lng,radius}, start_time, end_time, risk_points} ],
+       "latest_tourists": [{tourist_id, name, latitude, longitude, timestamp}] }
+    """
+    zone_type_ids = request.GET.get("zone_type_ids")
+    mode = request.GET.get("mode", "current")
+    include_tourists = request.GET.get("include_latest_tourists", "0") == "1"
+
+    alerts_qs = ZoneAlert.objects.select_related("zone_type", "zone_type__zone").all()
+
+    if zone_type_ids:
+        try:
+            ids = [int(x) for x in zone_type_ids.split(",") if x.strip()]
+            alerts_qs = alerts_qs.filter(zone_type__id__in=ids)
+        except ValueError:
+            pass
+
+    now = timezone.localtime()
+
+    if mode == "current":
+        now_t = now.time()
+        # filter alerts whose time window includes current time
+        alerts_qs = alerts_qs.filter(start_time__lte=now_t, end_time__gte=now_t)
+    elif mode == "custom":
+        start = parse_time_str(request.GET.get("start_time", ""))
+        end = parse_time_str(request.GET.get("end_time", ""))
+        if start and end:
+            # include if windows overlap: (a.start <= b.end) and (a.end >= b.start)
+            alerts_qs = alerts_qs.filter(start_time__lte=end, end_time__gte=start)
+    elif mode == "all":
+        # no additional time filter
+        pass
+
+    alerts = []
+    for a in alerts_qs.order_by("zone_type__zone__name", "start_time"):
+        alerts.append({
+            "id": a.id,
+            "zone_type": {"id": a.zone_type.id, "name": a.zone_type.name},
+            "zone": {
+                "id": a.zone_type.zone.id,
+                "name": a.zone_type.zone.name,
+                "latitude": a.zone_type.zone.latitude,
+                "longitude": a.zone_type.zone.longitude,
+                "radius": a.zone_type.zone.radius,
+            },
+            "start_time": a.start_time.strftime("%H:%M"),
+            "end_time": a.end_time.strftime("%H:%M"),
+            "risk_points": a.risk_points,
+        })
+
+    response = {"alerts": alerts}
+
+    if include_tourists:
+        # latest location per tourist
+        latest_ts = TouristLocation.objects.filter(tourist=OuterRef("pk")).order_by("-timestamp")
+        annot = Tourist.objects.annotate(latest_lat=Subquery(latest_ts.values("latitude")[:1]),
+                                          latest_lng=Subquery(latest_ts.values("longitude")[:1]),
+                                          latest_time=Subquery(latest_ts.values("timestamp")[:1]))
+        tourists = []
+        for t in annot:
+            if t.latest_lat and t.latest_lng:
+                tourists.append({
+                    "tourist_id": t.id,
+                    "name": t.name,
+                    "latitude": float(t.latest_lat),
+                    "longitude": float(t.latest_lng),
+                    "timestamp": t.latest_time.isoformat() if t.latest_time else None,
+                })
+        response["latest_tourists"] = tourists
+
+    return JsonResponse(response)
+
+
+def api_tourists_latest(request):
+    """Return latest location per tourist. Useful for showing current positions on the map.
+
+    Optional query params: none (could add pagination)
+    """
+    latest_ts = TouristLocation.objects.filter(tourist=OuterRef("pk")).order_by("-timestamp")
+    annot = Tourist.objects.annotate(latest_lat=Subquery(latest_ts.values("latitude")[:1]),
+                                      latest_lng=Subquery(latest_ts.values("longitude")[:1]),
+                                      latest_time=Subquery(latest_ts.values("timestamp")[:1]))
+
+    tourists = []
+    for t in annot:
+        if t.latest_lat and t.latest_lng:
+            tourists.append({
+                "tourist_id": t.id,
+                "userid": t.userid,
+                "name": t.name,
+                "latitude": float(t.latest_lat),
+                "longitude": float(t.latest_lng),
+                "timestamp": t.latest_time.isoformat() if t.latest_time else None,
+            })
+    return JsonResponse({"tourists": tourists})

@@ -1,0 +1,201 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SafeTour — Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="{% static 'css/safetour.css' %}" />
+</head>
+<body>
+  <div id="map"></div>
+
+  <!-- Overlay filter card -->
+  <div class="filter-card" id="filterCard">
+    <h3>Filters</h3>
+    <div id="zoneTypeContainer">
+      <strong>Zone Types</strong>
+      <div id="zoneTypeList">Loading...</div>
+    </div>
+
+    <div style="margin-top:8px;">
+      <strong>Time</strong>
+      <div>
+        <label><input type="radio" name="timeMode" value="current" checked> Current</label>
+        <label><input type="radio" name="timeMode" value="all"> All</label>
+        <label><input type="radio" name="timeMode" value="custom"> Custom</label>
+      </div>
+      <div id="customTimeInputs" style="display:none; margin-top:6px;">
+        <input type="time" id="customStart"> to <input type="time" id="customEnd">
+      </div>
+    </div>
+
+    <div style="margin-top:8px;">
+      <label><input type="checkbox" id="showTourists"> Show Tourists (latest)</label>
+    </div>
+
+    <div class="filter-actions">
+      <button id="applyFiltersBtn" class="btn">Apply</button>
+      <button id="resetFiltersBtn" class="btn btn-outline">Reset</button>
+    </div>
+
+    <div id="alertsList" class="alerts-list">
+      <!-- Alerts will be rendered here -->
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="{% static 'js/safetour.js' %}"></script>
+</body>
+</html>
+
+<style> 
+:root{
+  --card-bg: rgba(255,255,255,0.95);
+  --shadow: 0 6px 18px rgba(0,0,0,0.12);
+  --primary: #1f6feb;
+}
+html,body,#map{ height:100%; margin:0; padding:0; }
+#map{ width:100%; height:100vh; }
+
+.filter-card{
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  width: 300px;
+  background: var(--card-bg);
+  padding: 12px;
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  z-index: 1000;
+}
+.filter-card h3{ margin:0 0 8px 0; font-size:16px; }
+.zone-type-item{ display:flex; align-items:center; gap:8px; margin:6px 0; }
+.filter-actions{ margin-top:10px; display:flex; gap:8px; }
+.btn{ padding:8px 10px; border-radius:6px; border:0; cursor:pointer; background:var(--primary); color:#fff; }
+.btn-outline{ background:transparent; border:1px solid #ccc; color:#333; }
+.alerts-list{ margin-top:12px; max-height:260px; overflow:auto; }
+.alert-item{ padding:8px; border-radius:6px; margin-bottom:8px; background:#fff; box-shadow:0 2px 6px rgba(0,0,0,0.04); }
+.alert-item .meta{ font-size:12px; color:#666; }
+
+@media (max-width:600px){ .filter-card{ width:90%; left:5%; top:8px; } }
+</style>
+
+<script> 
+let map, zoneLayers = [], touristMarkers = [];
+
+function initMap(){
+  map = L.map('map').setView([23.73, 92.72], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+  }).addTo(map);
+}
+
+async function fetchFilterOptions(){
+  const res = await fetch('/api/filter_options/');
+  const data = await res.json();
+  const container = document.getElementById('zoneTypeList');
+  container.innerHTML = '';
+  data.zone_types.forEach(zt => {
+    const id = 'zt_' + zt.id;
+    const div = document.createElement('div');
+    div.className = 'zone-type-item';
+    div.innerHTML = `<label><input type="checkbox" value="${zt.id}" id="${id}"> ${zt.name} <span style="color:#888; font-size:12px"> — ${zt.zone_name}</span></label>`;
+    container.appendChild(div);
+  });
+}
+
+function readFilters(){
+  const checked = Array.from(document.querySelectorAll('#zoneTypeList input[type=checkbox]:checked')).map(el=>el.value);
+  const timeMode = document.querySelector('input[name=timeMode]:checked').value;
+  const customStart = document.getElementById('customStart').value;
+  const customEnd = document.getElementById('customEnd').value;
+  const showTourists = document.getElementById('showTourists').checked;
+  return {zone_type_ids: checked, timeMode, customStart, customEnd, showTourists};
+}
+
+function clearMap(){
+  zoneLayers.forEach(l=>map.removeLayer(l)); zoneLayers = [];
+  touristMarkers.forEach(m=>map.removeLayer(m)); touristMarkers = [];
+}
+
+async function applyFilters(){
+  const f = readFilters();
+  clearMap();
+  const params = new URLSearchParams();
+  if(f.zone_type_ids.length) params.set('zone_type_ids', f.zone_type_ids.join(','));
+  if(f.timeMode === 'current') params.set('mode','current');
+  else if(f.timeMode === 'all') params.set('mode','all');
+  else if(f.timeMode === 'custom'){
+    params.set('mode','custom');
+    if(f.customStart) params.set('start_time', f.customStart.substring(0,5));
+    if(f.customEnd) params.set('end_time', f.customEnd.substring(0,5));
+  }
+  if(f.showTourists) params.set('include_latest_tourists','1');
+
+  const res = await fetch('/api/alerts/?' + params.toString());
+  const json = await res.json();
+
+  // draw alerts (as circles centered on zone lat/lng)
+  json.alerts.forEach(a => {
+    const radius = a.zone.radius || 300;
+    const circle = L.circle([a.zone.latitude, a.zone.longitude], {radius: radius, weight:2});
+    circle.bindPopup(`<strong>${a.zone.name}</strong><br>${a.zone_type.name}<br>${a.start_time} - ${a.end_time}<br>Risk: ${a.risk_points}`);
+    circle.addTo(map);
+    zoneLayers.push(circle);
+  });
+
+  // optionally draw latest tourists returned in the same response
+  if(json.latest_tourists){
+    json.latest_tourists.forEach(t => {
+      const m = L.marker([t.latitude, t.longitude]);
+      m.bindPopup(`<strong>${t.name}</strong><br>${new Date(t.timestamp).toLocaleString()}`);
+      m.addTo(map);
+      touristMarkers.push(m);
+    });
+  }
+
+  renderAlertsList(json.alerts);
+}
+
+function renderAlertsList(alerts){
+  const container = document.getElementById('alertsList');
+  container.innerHTML = '';
+  if(!alerts.length){ container.innerHTML = '<div class="alert-item">No alerts found for selected filters.</div>'; return; }
+  alerts.forEach(a=>{
+    const div = document.createElement('div');
+    div.className = 'alert-item';
+    div.innerHTML = `<div><strong>${a.zone.name} — ${a.zone_type.name}</strong></div>
+                     <div class="meta">${a.start_time} - ${a.end_time} • Risk: ${a.risk_points}</div>`;
+    div.addEventListener('click', ()=>{
+      map.flyTo([a.zone.latitude, a.zone.longitude], 15, {duration:0.6});
+    });
+    container.appendChild(div);
+  });
+}
+
+function bindUI(){
+  document.getElementById('applyFiltersBtn').addEventListener('click', applyFilters);
+  document.getElementById('resetFiltersBtn').addEventListener('click', async ()=>{
+    document.querySelectorAll('#zoneTypeList input[type=checkbox]').forEach(cb=>cb.checked=false);
+    document.querySelector('input[name=timeMode][value=current]').checked = true;
+    document.getElementById('customTimeInputs').style.display='none';
+    document.getElementById('showTourists').checked = false;
+    await applyFilters();
+  });
+
+  document.querySelectorAll('input[name=timeMode]').forEach(r=> r.addEventListener('change', (e)=>{
+    document.getElementById('customTimeInputs').style.display = (e.target.value==='custom') ? 'block' : 'none';
+  }));
+}
+
+window.addEventListener('DOMContentLoaded', async ()=>{
+  initMap();
+  await fetchFilterOptions();
+  bindUI();
+  applyFilters();
+});
+</script>

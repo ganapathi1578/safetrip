@@ -99,9 +99,7 @@
                   <div style="margin-top:6px;">
                     {{ form.name.label_tag }} {{ form.name }}
                   </div>
-                  <div style="margin-top:6px;">
-                    {{ form.description.label_tag }} {{ form.description }}
-                  </div>
+
 
                   <div class="alerts-list" id="alerts-for-type-{{ forloop.counter0 }}">
                     <h4>Alerts
@@ -322,10 +320,7 @@
             <input type="text" name="${typesPrefix}-${index}-name" id="id_${typesPrefix}-${index}-name" />
             <input type="hidden" name="${typesPrefix}-${index}-DELETE" value="" />
           </div>
-          <div style="margin-top:6px;">
-            <label for="id_${typesPrefix}-${index}-description">Description:</label>
-            <textarea name="${typesPrefix}-${index}-description" id="id_${typesPrefix}-${index}-description" rows="2"></textarea>
-          </div>
+
 
           <div class="alerts-list" id="alerts-for-type-${index}">
             <h4>Alerts

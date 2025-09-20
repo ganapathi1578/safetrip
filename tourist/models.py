@@ -9,6 +9,9 @@ class Tourist(models.Model):
     userid = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=100)
     email = models.EmailField(unique=True)
+    #gender
+    #date of birth 
+    # blood
     mobile_no = models.CharField(max_length=15)
     aadhaar_no = models.CharField(max_length=12, blank=True, null=True)
     passport_no = models.CharField(max_length=20, blank=True, null=True)
@@ -48,6 +51,7 @@ class Itinerary(models.Model):
     title = models.CharField(max_length=100)  # e.g., "Goa Summer Vacation"
     start_date = models.DateField()
     end_date = models.DateField()
+    # purpouse
     base_location = models.CharField(max_length=200)  # state/city/country of stay
     created_at = models.DateTimeField(auto_now_add=True)
 
