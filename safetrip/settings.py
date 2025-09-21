@@ -124,3 +124,23 @@ STATIC_URL = '/static/'
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / "static"]
 TEMPLATES[0]['DIRS'] = [BASE_DIR / "templates"]
+
+
+
+## SMS API Credentials
+# settings.py
+
+# MSG91 Credentials
+MSG91_AUTH_KEY = "your_auth_key"
+MSG91_TEMPLATE_ID = "your_template_id"
+MSG91_BASE_URL = "https://api.msg91.com/api/v5/flow/"
+
+
+## SMTP Email
+# settings.py
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'  # or your email host
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'your-email@gmail.com'
+EMAIL_HOST_PASSWORD = 'your-app-password'  # use app password if Gmail
