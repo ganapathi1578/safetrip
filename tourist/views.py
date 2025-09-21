@@ -12,7 +12,7 @@ from .models import Tourist, OTP, APIKey, AuditLog
 from django.views.decorators.csrf import csrf_exempt
 import json
 from .models import Tourist, Itinerary, Trip, TouristLocation
-from decorators import require_api_key
+from .decorators import require_api_key
 from .models import AadhaarOTP
 from django.core.mail import send_mail
 
