@@ -6,6 +6,7 @@ def require_api_key(view_func):
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
         auth_header = request.headers.get('Authorization')
+        print(request.headers)
         if not auth_header or not auth_header.startswith('Api-Key '):
             return JsonResponse({'error': 'Missing or invalid Authorization header'}, status=401)
 

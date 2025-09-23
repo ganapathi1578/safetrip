@@ -12,4 +12,9 @@ urlpatterns = [
 
     path("request-email-otp/", views.request_email_otp, name="request_email_otp"),  ## Email
     path("verify-email-otp/", views.verify_email_otp, name="verify_email_otp"),
+
+    path('get-tourist-details/', views.get_tourist_details, name='get_tourist_details'),
+    path('save-tourist-details/', views.save_tourist_details, name='save_tourist_details'),
+
+    path("save-tourist-location/", views.save_tourist_location, name="save_tourist_location"),
 ]

@@ -2,6 +2,7 @@ import random
 from datetime import timedelta
 from django.db import transaction
 from django.http import JsonResponse, HttpResponseForbidden
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 import random, secrets, hashlib, requests
 from django.conf import settings
@@ -15,7 +16,13 @@ from .models import Tourist, Itinerary, Trip, TouristLocation
 from .decorators import require_api_key
 from .models import AadhaarOTP
 from django.core.mail import send_mail
-
+from django.views.decorators.csrf import csrf_exempt
+import json
+from datetime import timedelta
+from django.utils import timezone
+from django.http import JsonResponse
+from .models import Tourist, OTP
+import random
 
 # # A few Aizawl landmarks (approximate coords)
 # AIZAWL_PLACES = {
@@ -168,8 +175,10 @@ def send_otp_msg91(mobile, otp):
             {"mobiles": f"91{mobile}", "otp": str(otp)}
         ]
     }
-    response = requests.post(url, json=payload, headers=headers)
-    return response.json()
+    #response = requests.post(url, json=payload, headers=headers)
+    #return response.json()
+    print(otp)
+    return otp
 
 
 @csrf_exempt
@@ -183,30 +192,38 @@ def request_otp(request):
     if not mobile:
         return JsonResponse({"error": "Mobile number required"}, status=400)
 
+    # Check if tourist exists, create if not
+    tourist, _ = Tourist.objects.get_or_create(
+        mobile_no=mobile,
+        defaults={"userid": f"user_{secrets.token_hex(4)}", "name": "Pending Name"}
+    )
+
     otp_code = random.randint(100000, 999999)
     expires_at = timezone.now() + timedelta(minutes=5)
 
     # store OTP in DB
     otp_obj = OTP.objects.create(
-        tourist=None,  # will link later if user exists
+        tourist=tourist,
         code=str(otp_code),
         expires_at=expires_at
     )
 
-    # create a session hash (to identify OTP session)
+    # create a session hash
     otp_hash = hashlib.sha256(f"{otp_obj.id}{otp_code}{secrets.token_hex(8)}".encode()).hexdigest()
-
-    # temporarily store hash in details
+    
     otp_obj.details = otp_hash
-    otp_obj.save(update_fields=["details"]) if hasattr(otp_obj, "details") else None
+    otp_obj.save()
 
-    # send via MSG91
+    # send OTP via MSG91
     send_response = send_otp_msg91(mobile, otp_code)
 
-    # log
-    AuditLog.objects.create(user=None, action="OTP_SENT", details=f"Mobile {mobile}")
+    # log in AuditLog
+    AuditLog.objects.create(user=tourist, action="OTP_SENT", details=f"Mobile {mobile}")
 
-    return JsonResponse({"hash": otp_hash, "status": "OTP sent", "response": send_response})
+    return JsonResponse({
+        "hash": otp_hash,
+        "status": "OTP sent"
+    })
 
 
 @csrf_exempt
@@ -218,7 +235,7 @@ def verify_otp(request):
     otp_code = data.get("otp")
     otp_hash = data.get("hash")
     mobile = data.get("mobile")
-
+    print(otp_code, otp_hash, mobile)
     if not otp_code or not otp_hash or not mobile:
         return JsonResponse({"error": "otp, hash, mobile required"}, status=400)
 
@@ -231,11 +248,8 @@ def verify_otp(request):
     otp_obj.is_used = True
     otp_obj.save()
 
-    # check tourist exists
-    tourist, created = Tourist.objects.get_or_create(
-        mobile_no=mobile,
-        defaults={"userid": f"user_{secrets.token_hex(4)}", "name": "Pending Name"}
-    )
+    # get the tourist
+    tourist = otp_obj.tourist
     tourist.is_mobile_verified = True
     tourist.save()
 
@@ -248,10 +262,13 @@ def verify_otp(request):
 
     return JsonResponse({
         "status": "success",
-        "is_user_exists": not created,
+        "user_id": tourist.userid,
         "api_key": api_key.key,
-        "user_id": tourist.userid
+        "is_mobile_verified": tourist.is_mobile_verified,
+        "is_email_verified": getattr(tourist, "email_verified", False),
+        "is_aadhaar_verified": getattr(tourist, "aadhaar_verified", False)
     })
+
 
 
 
@@ -268,14 +285,16 @@ def send_aadhaar_otp(request):
         return JsonResponse({"error": "Aadhaar number required"}, status=400)
 
     # Call Aadhaar API to send OTP (mock example)
-    aadhaar_api_url = "https://aadhaar-api.gov/send-otp"
-    payload = {"aadhaar": aadhaar_number}
-    # In reality, you’ll need API headers, keys, etc.
-    response = requests.post(aadhaar_api_url, json=payload).json()
+    # aadhaar_api_url = "https://aadhaar-api.gov/send-otp"
+    # payload = {"aadhaar": aadhaar_number}
+    # # In reality, you’ll need API headers, keys, etc.
+    # response = requests.post(aadhaar_api_url, json=payload).json()
 
-    txn_id = response.get("txnId")  # Aadhaar API returns txnId
-    if not txn_id:
-        return JsonResponse({"error": "Failed to send OTP"}, status=500)
+    # txn_id = response.get("txnId")  # Aadhaar API returns txnId
+    # if not txn_id:
+    #     return JsonResponse({"error": "Failed to send OTP"}, status=500)
+    print(aadhaar_number)
+    txn_id = hashlib.sha256(f"{int(aadhaar_number)}".encode()).hexdigest()
 
     # Save in DB
     AadhaarOTP.objects.create(tourist=request.user, txn_id=txn_id)
@@ -306,27 +325,73 @@ def verify_aadhaar_otp(request):
         return JsonResponse({"error": "OTP expired or already verified"}, status=400)
 
     # Call Aadhaar API to verify OTP (mock)
-    aadhaar_verify_url = "https://aadhaar-api.gov/verify-otp"
-    payload = {"txnId": txn_id, "otp": otp}
-    response = requests.post(aadhaar_verify_url, json=payload).json()
+    # aadhaar_verify_url = "https://aadhaar-api.gov/verify-otp"
+    # payload = {"txnId": txn_id, "otp": otp}
+    # response = requests.post(aadhaar_verify_url, json=payload).json()
 
-    if not response.get("success"):
-        return JsonResponse({"error": "OTP verification failed"}, status=400)
+    # if not response.get("success"):
+    #     return JsonResponse({"error": "OTP verification failed"}, status=400)
 
     # Mark OTP verified
     aadhaar_otp.is_verified = True
     aadhaar_otp.save()
 
     # Update Tourist details
-    details = response.get("aadhaar_details", {})
+    # details = response.get("aadhaar_details", {})
     tourist = request.user
-    tourist.name = details.get("name", tourist.name)
-    tourist.dob = details.get("dob", tourist.dob)
-    tourist.gender = details.get("gender", tourist.gender)
-    tourist.aadhaar_no = details.get("aadhaar_no", tourist.aadhaar_no)
+    # tourist.name = details.get("name", tourist.name)
+    # tourist.dob = details.get("dob", tourist.dob)
+    # tourist.gender = details.get("gender", tourist.gender)
+    # tourist.aadhaar_no = details.get("aadhaar_no", tourist.aadhaar_no)
     tourist.save()
 
-    return JsonResponse({"status": "Aadhaar verified", "details": details})
+    return JsonResponse({"status": "Aadhaar verified"})
+
+
+# @csrf_exempt
+# @require_api_key
+# def verify_aadhaar_otp(request):
+#     if request.method != "POST":
+#         return JsonResponse({"error": "POST only"}, status=405)
+
+#     data = json.loads(request.body.decode("utf-8"))
+#     txn_id = data.get("txn_id")
+#     otp = data.get("otp")
+
+#     if not txn_id or not otp:
+#         return JsonResponse({"error": "txn_id and otp required"}, status=400)
+
+#     # Get OTP object
+#     try:
+#         aadhaar_otp = AadhaarOTP.objects.get(txn_id=txn_id, tourist=request.user)
+#     except AadhaarOTP.DoesNotExist:
+#         return JsonResponse({"error": "Invalid txn_id"}, status=404)
+
+#     if not aadhaar_otp.is_valid():
+#         return JsonResponse({"error": "OTP expired or already verified"}, status=400)
+
+#     # Call Aadhaar API to verify OTP (mock)
+#     aadhaar_verify_url = "https://aadhaar-api.gov/verify-otp"
+#     payload = {"txnId": txn_id, "otp": otp}
+#     response = requests.post(aadhaar_verify_url, json=payload).json()
+
+#     if not response.get("success"):
+#         return JsonResponse({"error": "OTP verification failed"}, status=400)
+
+#     # Mark OTP verified
+#     aadhaar_otp.is_verified = True
+#     aadhaar_otp.save()
+
+#     # Update Tourist details
+#     details = response.get("aadhaar_details", {})
+#     tourist = request.user
+#     tourist.name = details.get("name", tourist.name)
+#     tourist.dob = details.get("dob", tourist.dob)
+#     tourist.gender = details.get("gender", tourist.gender)
+#     tourist.aadhaar_no = details.get("aadhaar_no", tourist.aadhaar_no)
+#     tourist.save()
+
+#     return JsonResponse({"status": "Aadhaar verified", "details": details})
 
 
 
@@ -340,13 +405,7 @@ def send_email_otp(to_email, otp_code):
 
 
 
-from django.views.decorators.csrf import csrf_exempt
-import json
-from datetime import timedelta
-from django.utils import timezone
-from django.http import JsonResponse
-from .models import Tourist, OTP
-import random
+
 
 @csrf_exempt
 @require_api_key
@@ -355,17 +414,24 @@ def request_email_otp(request):
         return JsonResponse({"error": "POST only"}, status=405)
 
     data = json.loads(request.body.decode("utf-8"))
+    userid = data.get("user_id")
     email = data.get("email")
 
-    if not email:
-        return JsonResponse({"error": "Email required"}, status=400)
+    if not userid or not email:
+        return JsonResponse({"error": "User ID and Email are required"}, status=400)
 
     try:
-        tourist = Tourist.objects.get(email=email)
+        # Search for the tourist using the user_id string field
+        tourist = Tourist.objects.get(userid=userid)
     except Tourist.DoesNotExist:
-        return JsonResponse({"error": "Email not found"}, status=404)
+        return JsonResponse({"error": "Tourist not found"}, status=404)
+
+    # Update the tourist's email address with the new email
+    tourist.email = email
+    tourist.save()
 
     otp_code = random.randint(100000, 999999)
+    print(otp_code)
     expires_at = timezone.now() + timedelta(minutes=5)
 
     otp_obj = OTP.objects.create(
@@ -376,7 +442,7 @@ def request_email_otp(request):
     )
 
     send_email_otp(email, otp_code)
-    return JsonResponse({"status": "OTP sent to email"})
+    return JsonResponse({"status": "OTP sent to email and user email updated"})
 
 
 @csrf_exempt
@@ -386,16 +452,17 @@ def verify_email_otp(request):
         return JsonResponse({"error": "POST only"}, status=405)
 
     data = json.loads(request.body.decode("utf-8"))
-    email = data.get("email")
+    userid = data.get("user_id")
     otp_code = data.get("otp")
 
-    if not email or not otp_code:
-        return JsonResponse({"error": "Email and OTP required"}, status=400)
+    if not userid or not otp_code:
+        return JsonResponse({"error": "User ID and OTP required"}, status=400)
 
     try:
-        tourist = Tourist.objects.get(email=email)
+        # Search for the tourist using the user_id string field
+        tourist = Tourist.objects.get(userid=userid)
     except Tourist.DoesNotExist:
-        return JsonResponse({"error": "Email not found"}, status=404)
+        return JsonResponse({"error": "Tourist not found"}, status=404)
 
     otp_obj = OTP.objects.filter(
         tourist=tourist,
@@ -410,8 +477,126 @@ def verify_email_otp(request):
     otp_obj.is_used = True
     otp_obj.save()
 
-    # Mark email verified
-    tourist.email_verified = True  # optional field in Tourist
+    # Mark email as verified
+    tourist.email_verified = True
     tourist.save()
 
     return JsonResponse({"status": "Email verified"})
+
+
+
+
+
+
+@csrf_exempt
+@require_api_key
+def get_tourist_details(request):
+    """
+    Fetches a tourist's complete details by their user ID.
+    This is a GET request.
+    """
+    if request.method != "GET":
+        return JsonResponse({"error": "GET only"}, status=405)
+
+    user_id = request.GET.get("user_id")
+    if not user_id:
+        return JsonResponse({"error": "User ID required"}, status=400)
+
+    try:
+        tourist = Tourist.objects.get(userid=user_id)
+        # Serialize the tourist object to a dictionary
+        details = {
+            "userid": tourist.userid,
+            "name": tourist.name,
+            "email": tourist.email,
+            "gender": tourist.gender,
+            "dob": str(tourist.dob) if tourist.dob else None,
+            "blood_group": tourist.blood_group,
+            "mobile_no": tourist.mobile_no,
+            "is_mobile_verified": tourist.is_mobile_verified,
+            "email_verified": tourist.email_verified,
+            "aadhaar_no": tourist.aadhaar_no,
+            "aadhaar_verified": tourist.aadhaar_verified,
+            "passport_no": tourist.passport_no,
+            "emergency_contact": tourist.emergency_contact,
+        }
+        return JsonResponse(details)
+    except Tourist.DoesNotExist:
+        return JsonResponse({"error": "Tourist not found"}, status=404)
+
+@csrf_exempt
+@require_api_key
+def save_tourist_details(request):
+    """
+    Saves and updates a tourist's details.
+    This is a POST request.
+    """
+    if request.method != "POST":
+        return JsonResponse({"error": "POST only"}, status=405)
+
+    data = json.loads(request.body.decode("utf-8"))
+    user_id = data.get("user_id")
+    if not user_id:
+        return JsonResponse({"error": "User ID is required"}, status=400)
+
+    try:
+        tourist = Tourist.objects.get(userid=user_id)
+        
+        # Update editable fields
+        tourist.name = data.get("name", tourist.name)
+        tourist.gender = data.get("gender", tourist.gender)
+        tourist.dob = data.get("dob") if data.get("dob") else tourist.dob
+        tourist.blood_group = data.get("blood_group", tourist.blood_group)
+        tourist.passport_no = data.get("passport_no", tourist.passport_no)
+        tourist.emergency_contact = data.get("emergency_contact", tourist.emergency_contact)
+
+        tourist.save()
+
+        return JsonResponse({"status": "Details saved successfully"})
+    except Tourist.DoesNotExist:
+        return JsonResponse({"error": "Tourist not found"}, status=404)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+
+@csrf_exempt
+def save_tourist_location(request):
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body.decode("utf-8"))
+
+            userid = data.get("user_id")
+            latitude = data.get("latitude")
+            longitude = data.get("longitude")
+            timestamp = data.get("timestamp", timezone.now())
+
+            if not userid or not latitude or not longitude:
+                return JsonResponse({"error": "Missing required fields"}, status=400)
+
+            # find the tourist
+            tourist = get_object_or_404(Tourist, userid=userid)
+
+            # save location
+            location = TouristLocation.objects.create(
+                tourist=tourist,
+                latitude=latitude,
+                longitude=longitude,
+                timestamp=timestamp,
+            )
+
+            return JsonResponse({
+                "status": "success",
+                "id": location.id,
+                "user_id": tourist.userid,
+                "latitude": str(location.latitude),
+                "longitude": str(location.longitude),
+                "timestamp": location.timestamp.isoformat(),
+            }, status=201)
+
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+
+    return JsonResponse({"error": "Invalid method"}, status=405)
