@@ -1,11 +1,41 @@
-{% extends 'base.html' %}
+<!-- {% extends 'base.html' %} -->
 {% load static %}
-{% block title %}Login{% endblock %}
+{% block title %}Police Station Login{% endblock %}
 {% block content %}
-<h2>Police Officer Login</h2>
-<form method="POST">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Login</button>
-</form>
+<link rel="stylesheet" href="{% static 'css/police_auth.css' %}">
+<div class="auth-container">
+  <div class="auth-left">
+    <h2>Police Station Login</h2>
+    <p class="station-info">
+      Access your dashboard to monitor tourist safety and respond to alerts in your area.
+    </p>
+    <ul>
+      <li>Real-time tourist safety monitoring</li>
+      <li>Instant emergency alerts</li>
+      <li>Tourist registration data</li>
+      <li>Inter-station coordination</li>
+    </ul>
+    <p class="help">
+      New station? <a href="{% url 'register' %}">Register here</a>
+    </p>
+  </div>
+  <div class="auth-right">
+    <h3>Station Login</h3>
+    <form method="POST" autocomplete="off">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      {% for field in form %}
+        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+        {{ field }}
+        {% if field.errors %}
+          <div class="error">{{ field.errors|striptags }}</div>
+        {% endif %}
+      {% endfor %}
+      <button type="submit">Login</button>
+    </form>
+    <p class="help">
+      Need help? Contact: <a href="mailto:support@safetour.police">support@safetour.police</a>
+    </p>
+  </div>
+</div>
 {% endblock %}
