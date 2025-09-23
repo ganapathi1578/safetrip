@@ -61,54 +61,93 @@ from django.views.decorators.http import require_http_methods
 
 from .forms import ZoneForm, ZoneTypeFormSet, ZoneAlertFormSet
 from .models import Zone, ZoneType, ZoneAlert
+from django.db import transaction
+from django.contrib import messages
+from django.shortcuts import render, redirect
+from django.views.decorators.http import require_http_methods
 
 @require_http_methods(["GET", "POST"])
 def add_zone(request):
     """
     Single page to create Zone + multiple ZoneTypes + multiple ZoneAlerts (per type).
-    The client-side JS will keep type_index on each alert to associate alerts with types.
+    Client JS keeps type_index on each alert so alerts can be associated with types.
     """
-
     if request.method == "POST":
         zone_form = ZoneForm(request.POST, prefix="zone")
         types_formset = ZoneTypeFormSet(request.POST, prefix="types")
         alerts_formset = ZoneAlertFormSet(request.POST, prefix="alerts")
 
-        # Validate all
-        if zone_form.is_valid() and types_formset.is_valid() and alerts_formset.is_valid():
-            # 1) Create Zone
-            zone = zone_form.save()
-
-            # 2) Create ZoneType objects and keep mapping from form-index -> ZoneType obj
-            type_map = {}  # index -> ZoneType instance
-            for idx, tform in enumerate(types_formset.cleaned_data):
-                if not tform or tform.get("DELETE", False):
-                    continue
-                name = tform.get("name")
-                zt = ZoneType.objects.create(zone=zone, name=name)
-                type_map[idx] = zt
-
-            # 3) Create alerts linked to the right ZoneType based on type_index
-            for aform in alerts_formset.cleaned_data:
-                if not aform or aform.get("DELETE", False):
-                    continue
-                type_index = aform.get("type_index")
-                # If the user added an alert for a deleted type, skip
-                zt = type_map.get(type_index)
-                if zt is None:
-                    continue
-                ZoneAlert.objects.create(
-                    zone_type=zt,
-                    start_time=aform.get("start_time"),
-                    end_time=aform.get("end_time"),
-                    risk_points=aform.get("risk_points"),
-                )
-
-            messages.success(request, "Zone, types and alerts saved successfully.")
-            return redirect("add_zone")
+        # debug helpers - if invalid, include the errors in messages to help debugging
+        is_valid = zone_form.is_valid() and types_formset.is_valid() and alerts_formset.is_valid()
+        if not is_valid:
+            # Provide useful error output for debugging in dev — remove/adjust in production
+            if not zone_form.is_valid():
+                messages.error(request, f"Zone form errors: {zone_form.errors}")
+            if not types_formset.is_valid():
+                # formset.non_form_errors may include management_form problems
+                messages.error(request, f"Types formset non-form errors: {types_formset.non_form_errors()}; forms errors: {[f.errors for f in types_formset]}")
+            if not alerts_formset.is_valid():
+                messages.error(request, f"Alerts formset non-form errors: {alerts_formset.non_form_errors()}; forms errors: {[f.errors for f in alerts_formset]}")
+            # Fall through to render form with validation error messages shown in template
         else:
-            # show errors inline
-            messages.error(request, "Please fix the errors below.")
+            # All valid -> perform DB writes inside a transaction
+            try:
+                with transaction.atomic():
+                    zone = zone_form.save()
+
+                    # Create ZoneType objects and map form-index -> ZoneType instance
+                    type_map = {}
+                    # types_formset.cleaned_data is a list ordered by form index (0..TOTAL_FORMS-1)
+                    for form_index, tdata in enumerate(types_formset.cleaned_data):
+                        # Cleaned data may contain empty dicts for entirely-empty extra forms
+                        if not tdata:
+                            continue
+                        # If the form was marked for deletion, skip it
+                        if tdata.get("DELETE", False):
+                            continue
+                        # Get the name (or other fields) and create model
+                        name = tdata.get("name")
+                        if not name:
+                            # skip blank names to be safe
+                            continue
+                        zt = ZoneType.objects.create(zone=zone, name=name)
+                        type_map[form_index] = zt
+
+                    # Create ZoneAlert objects and attach them to the right ZoneType
+                    for adata in alerts_formset.cleaned_data:
+                        if not adata:
+                            continue
+                        if adata.get("DELETE", False):
+                            continue
+                        # type_index should be provided by your client JS
+                        type_index = adata.get("type_index")
+                        if type_index is None:
+                            # skip alerts with no mapping (or you could raise/log)
+                            continue
+                        # ensure it's an int (sometimes comes as string)
+                        try:
+                            type_index = int(type_index)
+                        except (ValueError, TypeError):
+                            continue
+                        zt = type_map.get(type_index)
+                        if zt is None:
+                            # alert refers to a type that was deleted or doesn't exist - skip
+                            continue
+
+                        # Create ZoneAlert (adjust fields if your model has different names)
+                        ZoneAlert.objects.create(
+                            zone_type=zt,
+                            start_time=adata.get("start_time"),
+                            end_time=adata.get("end_time"),
+                            risk_points=adata.get("risk_points"),
+                        )
+
+                messages.success(request, "Zone, types and alerts saved successfully.")
+                return redirect("add_zone")
+            except Exception as e:
+                # Rollback is automatic because of transaction.atomic(); show error for debugging
+                messages.error(request, f"An error occurred while saving: {e}")
+
     else:
         zone_form = ZoneForm(prefix="zone")
         types_formset = ZoneTypeFormSet(prefix="types")
@@ -120,6 +159,7 @@ def add_zone(request):
         "alerts_formset": alerts_formset,
     }
     return render(request, "dept/add_zone.html", context)
+
 
 
 @require_GET
@@ -286,7 +326,7 @@ def api_alerts(request):
             "end_time": a.end_time.strftime("%H:%M"),
             "risk_points": a.risk_points,
         })
-
+    #print(alerts)
     response = {"alerts": alerts}
 
     if include_tourists:

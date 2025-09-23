@@ -7,7 +7,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SafeTour — Map</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="{% static 'css/safetour.css' %}" />
   <link rel="stylesheet" href="{% static 'css/zone_management.css' %}" />
 </head>
 <body>
@@ -77,7 +76,7 @@ function initMap(){
 }
 
 async function fetchFilterOptions(){
-  const res = await fetch('/api/filter_options/');
+  const res = await fetch('/dept/api/filter_options/');
   const data = await res.json();
   const container = document.getElementById('zoneTypeList');
   container.innerHTML = '';
@@ -118,7 +117,7 @@ async function applyFilters(){
   }
   if(f.showTourists) params.set('include_latest_tourists','1');
 
-  const res = await fetch('/api/alerts/?' + params.toString());
+  const res = await fetch('/dept/api/alerts/?' + params.toString());
   const json = await res.json();
 
   // draw alerts (as circles centered on zone lat/lng)

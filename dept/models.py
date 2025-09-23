@@ -28,20 +28,20 @@ class PoliceOfficer(models.Model):
 from django.db import models
 
 class Zone(models.Model):
-    name = models.CharField(max_length=100)  # e.g., "Central Aizawl"
-    latitude = models.FloatField()
-    longitude = models.FloatField()
-    radius = models.FloatField(help_text="Radius in meters")
+    name = models.CharField(max_length=100, blank=True)  # e.g., "Central Aizawl"
+    latitude = models.FloatField(blank=True)
+    longitude = models.FloatField(blank=True)
+    radius = models.FloatField(help_text="Radius in meters",blank=True)
 
     def __str__(self):
         return self.name
 
 
 class ZoneType(models.Model):
-    # NOTE: ZoneType is now tied to a particular Zone (hierarchical)
-    zone = models.ForeignKey(Zone, on_delete=models.CASCADE, related_name="zone_types")
-    name = models.CharField(max_length=100)  # e.g., "Crime", "Flood", "Landslide"
-    #description = models.TextField(blank=True, null=True)
+
+    zone = models.ForeignKey(Zone, on_delete=models.CASCADE, related_name="zone_types",blank=True)
+    name = models.CharField(max_length=100, blank=True)  # e.g., "Crime", "Flood", "Landslide"
+
 
     class Meta:
         # same type name can exist across different zones but keep unique per-zone
@@ -54,12 +54,12 @@ class ZoneType(models.Model):
 
 class ZoneAlert(models.Model):
     # now alert belongs to a ZoneType (which already knows the Zone)
-    zone_type = models.ForeignKey(ZoneType, on_delete=models.CASCADE, related_name="alerts")
+    zone_type = models.ForeignKey(ZoneType, on_delete=models.CASCADE, related_name="alerts", blank=True)
 
     # allow either time-of-day windows (TimeField) OR full datetime if needed later.
-    start_time = models.TimeField()
-    end_time = models.TimeField()
-    risk_points = models.PositiveIntegerField(default=0, help_text="Risk score between 0 and 100")
+    start_time = models.TimeField(blank=True)
+    end_time = models.TimeField(blank=True)
+    risk_points = models.PositiveIntegerField(default=0, help_text="Risk score between 0 and 100", blank=True)
 
     class Meta:
         ordering = ("zone_type", "start_time")
