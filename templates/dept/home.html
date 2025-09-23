@@ -8,83 +8,65 @@
   <title>SafeTour — Map</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="{% static 'css/safetour.css' %}" />
+  <link rel="stylesheet" href="{% static 'css/zone_management.css' %}" />
 </head>
 <body>
   <div id="map"></div>
 
-  <!-- Overlay filter card -->
-  <div class="filter-card" id="filterCard">
-    <h3>Filters</h3>
-    <div id="zoneTypeContainer">
-      <strong>Zone Types</strong>
-      <div id="zoneTypeList">Loading...</div>
-    </div>
-
-    <div style="margin-top:8px;">
-      <strong>Time</strong>
-      <div>
-        <label><input type="radio" name="timeMode" value="current" checked> Current</label>
-        <label><input type="radio" name="timeMode" value="all"> All</label>
-        <label><input type="radio" name="timeMode" value="custom"> Custom</label>
-      </div>
-      <div id="customTimeInputs" style="display:none; margin-top:6px;">
-        <input type="time" id="customStart"> to <input type="time" id="customEnd">
+  <!-- Top bar (Google maps style) -->
+  <div class="top-bar" id="topBar">
+    <div class="top-left">
+      <div class="search-box">
+        <input type="search" placeholder="Search map" aria-label="Search map">
+        <button class="search-btn">🔍</button>
       </div>
     </div>
-
-    <div style="margin-top:8px;">
-      <label><input type="checkbox" id="showTourists"> Show Tourists (latest)</label>
+    <div class="top-center">
+      <div class="pill-group">
+        <button class="pill" id="openZoneTypes">Filters</button>
+        <!-- <button class="pill" id="openTimeFilter">Time</button> -->
+        <button class="pill" id="toggleTouristsBtn">Tourists</button>
+        <button class="pill" id="applyFiltersBtn">Apply</button>
+        <button class="pill" id="resetFiltersBtn">Reset</button>
+      </div>
     </div>
+    <div class="filters-dropdown" id="filtersDropdown" aria-hidden="true">
+      <h4>Filters</h4>
+      <div id="zoneTypeContainer">
+        <strong>Zone Types</strong>
+        <div id="zoneTypeList">Loading...</div>
+      </div>
 
-    <div class="filter-actions">
-      <button id="applyFiltersBtn" class="btn">Apply</button>
-      <button id="resetFiltersBtn" class="btn btn-outline">Reset</button>
-    </div>
+      <div style="margin-top:8px;">
+        <strong>Time</strong>
+        <div>
+          <label><input type="radio" name="timeMode" value="current" checked> Current</label>
+          <label><input type="radio" name="timeMode" value="all"> All</label>
+          <label><input type="radio" name="timeMode" value="custom"> Custom</label>
+        </div>
+        <div id="customTimeInputs" style="display:none; margin-top:6px;">
+          <input type="time" id="customStart"> to <input type="time" id="customEnd">
+        </div>
+      </div>
 
-    <div id="alertsList" class="alerts-list">
-      <!-- Alerts will be rendered here -->
+      <div style="margin-top:8px;">
+        <label><input type="checkbox" id="showTourists"> Show Tourists (latest)</label>
+      </div>
     </div>
   </div>
 
+  <!-- Right side alerts panel -->
+  <aside class="alerts-panel" id="alertsPanel">
+    <div class="alerts-header"><strong>Alerts</strong></div>
+    <div id="alertsList" class="alerts-list">
+      <!-- Alerts will be rendered here -->
+    </div>
+  </aside>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="{% static 'js/safetour.js' %}"></script>
-</body>
-</html>
 
-<style> 
-:root{
-  --card-bg: rgba(255,255,255,0.95);
-  --shadow: 0 6px 18px rgba(0,0,0,0.12);
-  --primary: #1f6feb;
-}
-html,body,#map{ height:100%; margin:0; padding:0; }
-#map{ width:100%; height:100vh; }
-
-.filter-card{
-  position: absolute;
-  left: 12px;
-  top: 12px;
-  width: 300px;
-  background: var(--card-bg);
-  padding: 12px;
-  border-radius: 8px;
-  box-shadow: var(--shadow);
-  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
-  z-index: 1000;
-}
-.filter-card h3{ margin:0 0 8px 0; font-size:16px; }
-.zone-type-item{ display:flex; align-items:center; gap:8px; margin:6px 0; }
-.filter-actions{ margin-top:10px; display:flex; gap:8px; }
-.btn{ padding:8px 10px; border-radius:6px; border:0; cursor:pointer; background:var(--primary); color:#fff; }
-.btn-outline{ background:transparent; border:1px solid #ccc; color:#333; }
-.alerts-list{ margin-top:12px; max-height:260px; overflow:auto; }
-.alert-item{ padding:8px; border-radius:6px; margin-bottom:8px; background:#fff; box-shadow:0 2px 6px rgba(0,0,0,0.04); }
-.alert-item .meta{ font-size:12px; color:#666; }
-
-@media (max-width:600px){ .filter-card{ width:90%; left:5%; top:8px; } }
-</style>
-
-<script> 
+  <script>
 let map, zoneLayers = [], touristMarkers = [];
 
 function initMap(){
@@ -113,7 +95,7 @@ function readFilters(){
   const timeMode = document.querySelector('input[name=timeMode]:checked').value;
   const customStart = document.getElementById('customStart').value;
   const customEnd = document.getElementById('customEnd').value;
-  const showTourists = document.getElementById('showTourists').checked;
+  const showTourists = document.getElementById('showTourists') ? document.getElementById('showTourists').checked : false;
   return {zone_type_ids: checked, timeMode, customStart, customEnd, showTourists};
 }
 
@@ -178,18 +160,79 @@ function renderAlertsList(alerts){
 }
 
 function bindUI(){
-  document.getElementById('applyFiltersBtn').addEventListener('click', applyFilters);
-  document.getElementById('resetFiltersBtn').addEventListener('click', async ()=>{
+  const applyBtn = document.getElementById('applyFiltersBtn');
+  if(applyBtn) applyBtn.addEventListener('click', applyFilters);
+  const resetBtn = document.getElementById('resetFiltersBtn');
+  if(resetBtn) resetBtn.addEventListener('click', async ()=>{
     document.querySelectorAll('#zoneTypeList input[type=checkbox]').forEach(cb=>cb.checked=false);
-    document.querySelector('input[name=timeMode][value=current]').checked = true;
-    document.getElementById('customTimeInputs').style.display='none';
-    document.getElementById('showTourists').checked = false;
+    const current = document.querySelector('input[name=timeMode][value=current]'); if(current) current.checked = true;
+    const customInputs = document.getElementById('customTimeInputs'); if(customInputs) customInputs.style.display='none';
+    const showTouristsEl = document.getElementById('showTourists'); if(showTouristsEl) showTouristsEl.checked = false;
     await applyFilters();
   });
 
+  // open zone types / time sections
+  const openZone = document.getElementById('openZoneTypes');
+  const openTime = document.getElementById('openTimeFilter');
+  const toggleTouristsBtn = document.getElementById('toggleTouristsBtn');
+  const filtersDropdown = document.getElementById('filtersDropdown');
+  // zone button: open dropdown and scroll to zone list
+  if(openZone) openZone.addEventListener('click', ()=>{
+    if(filtersDropdown) filtersDropdown.setAttribute('aria-hidden','false');
+    const z = document.getElementById('zoneTypeList'); if(z) z.scrollIntoView({behavior:'smooth', block:'start'});
+  });
+  // time button: open dropdown and scroll to time controls
+  if(openTime) openTime.addEventListener('click', ()=>{
+    if(filtersDropdown) filtersDropdown.setAttribute('aria-hidden','false');
+    const t = document.getElementById('timeContainer'); if(t) t.scrollIntoView({behavior:'smooth', block:'center'});
+  });
+  // tourists button: toggle the showTourists checkbox, visually indicate, and apply filters
+  if(toggleTouristsBtn) toggleTouristsBtn.addEventListener('click', async ()=>{
+    const s = document.getElementById('showTourists');
+    if(s){ s.checked = !s.checked; toggleTouristsBtn.classList.toggle('active', s.checked); await applyFilters(); }
+  });
+  // ensure checkbox and pill stay in sync; changing checkbox updates pill and triggers filters
+  const showTouristsEl = document.getElementById('showTourists');
+  if(showTouristsEl){
+    showTouristsEl.addEventListener('change', async ()=>{
+      toggleTouristsBtn.classList.toggle('active', showTouristsEl.checked);
+      await applyFilters();
+    });
+  }
+
+  // close when clicking outside
+  document.addEventListener('click', (e)=>{
+    const dd = document.getElementById('filtersDropdown');
+    const topBar = document.querySelector('.top-bar');
+    if(!dd || dd.getAttribute('aria-hidden') === 'true') return;
+    if(!dd.contains(e.target) && !topBar.contains(e.target)) dd.setAttribute('aria-hidden','true');
+  });
+
   document.querySelectorAll('input[name=timeMode]').forEach(r=> r.addEventListener('change', (e)=>{
-    document.getElementById('customTimeInputs').style.display = (e.target.value==='custom') ? 'block' : 'none';
+    const ct = document.getElementById('customTimeInputs'); if(ct) ct.style.display = (e.target.value==='custom') ? 'block' : 'none';
   }));
+
+  // search handler (Nominatim) — pans map to first result and places temporary marker
+  const searchInput = document.querySelector('.search-box input[type=search]');
+  const searchBtn = document.querySelector('.search-box .search-btn');
+  let searchMarker = null;
+  async function doSearch(){
+    const q = searchInput && searchInput.value && searchInput.value.trim();
+    if(!q) return;
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}`;
+    try{
+      const r = await fetch(url, {headers:{'Accept':'application/json'}});
+      const results = await r.json();
+      if(!results || !results.length) return;
+      const first = results[0];
+      const lat = parseFloat(first.lat), lon = parseFloat(first.lon);
+      map.flyTo([lat, lon], 15, {duration:0.7});
+      if(searchMarker) map.removeLayer(searchMarker);
+      searchMarker = L.marker([lat, lon]).addTo(map).bindPopup(first.display_name).openPopup();
+    }catch(e){ console.error('search error', e); }
+  }
+  if(searchBtn) searchBtn.addEventListener('click', doSearch);
+  if(searchInput) searchInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') doSearch(); });
 }
 
 window.addEventListener('DOMContentLoaded', async ()=>{
@@ -198,4 +241,6 @@ window.addEventListener('DOMContentLoaded', async ()=>{
   bindUI();
   applyFilters();
 });
-</script>
+  </script>
+</body>
+</html>
