@@ -90,7 +90,7 @@ function initMap(){
 /* Fetch filter options (zone types) */
 async function fetchFilterOptions(){
   try {
-    const res = await fetch('/dept/api/filter_options/');
+    const res = await fetch('/api/filter_options/');
     if(!res.ok) throw new Error('Failed to load filter options');
     const data = await res.json();
     const container = document.getElementById('zoneTypeList');
@@ -150,7 +150,7 @@ async function applyFilters(){
   if(f.showTourists) params.set('include_latest_tourists','1');
 
   try {
-    const res = await fetch('/dept/api/alerts/?' + params.toString());
+    const res = await fetch('/api/alerts/?' + params.toString());
     if(!res.ok) throw new Error('alerts API failed: ' + res.status);
     const json = await res.json();
 
@@ -202,7 +202,7 @@ async function applyFilters(){
 async function showTouristDetails(userId) {
   if(!userId) return;
   try {
-    const res = await fetch(`/dept/tourist/${encodeURIComponent(userId)}/details/`);
+    const res = await fetch(`/tourist/${encodeURIComponent(userId)}/details/`);
     if (!res.ok) {
       console.error("Failed to fetch tourist details", res.status);
       const panel = document.getElementById("detailsContent");
