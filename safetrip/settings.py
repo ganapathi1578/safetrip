@@ -121,9 +121,8 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 
-<<<<<<< HEAD
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [BASE_DIR / "static"]
+STATICFILES_DIRS = [str(BASE_DIR / "static")]
 TEMPLATES[0]['DIRS'] = [BASE_DIR / "templates"]
 
 
@@ -145,6 +144,3 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'your-email@gmail.com'
 EMAIL_HOST_PASSWORD = 'your-app-password'  # use app password if Gmail
-=======
-STATICFILES_DIRS = [str(BASE_DIR / "static")]
->>>>>>> saurabh
