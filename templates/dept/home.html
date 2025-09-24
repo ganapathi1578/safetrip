@@ -8,7 +8,6 @@
   <title>SafeTour — Map</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="{% static 'css/zone_management.css' %}" />
-
 </head>
 <body>
   <div id="map"></div>
@@ -29,6 +28,7 @@
         <button class="pill" id="resetFiltersBtn">Reset</button>
       </div>
     </div>
+
     <!-- Filters dropdown (hidden by default using aria-hidden) -->
     <div class="filters-dropdown" id="filtersDropdown" aria-hidden="true">
       <h4>Filters</h4>
@@ -49,15 +49,12 @@
           <input type="time" id="customEnd">
         </div>
       </div>
-    </div>
-
 
       <div style="margin-top:8px;">
         <label><input type="checkbox" id="showTourists"> Show Tourists (latest)</label>
       </div>
     </div>
   </div>
-    
 
   <!-- Right side details panel -->
   <aside class="details-panel" id="detailsPanel">
@@ -69,22 +66,20 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-/* ---------- main JS (fixed) ---------- */
-let map, zoneLayers = [], touristMarkers = [];
-const filtersDropdown = document.getElementById("filtersDropdown");
+/* ---------- main JS (keeps all original features) ---------- */
+let map;
+let zoneLayers = [];
+let touristMarkers = [];
 
-  // Example: open it manually
-  function toggleFilters(show) {
-    filtersDropdown.setAttribute("aria-hidden", show ? "false" : "true");
-    filtersDropdown.style.display = show ? "block" : "none";
-  }
+/* Toggle helper */
+function toggleFilters(show) {
+  const dd = document.getElementById('filtersDropdown');
+  if (!dd) return;
+  dd.setAttribute("aria-hidden", show ? "false" : "true");
+  dd.style.display = show ? "block" : "none";
+}
 
-  // Hide when clicking outside
-  document.addEventListener("click", (event) => {
-    if (!filtersDropdown.contains(event.target) && filtersDropdown.getAttribute("aria-hidden") === "false") {
-      toggleFilters(false);
-    }
-  });
+/* Map init */
 function initMap(){
   map = L.map('map').setView([23.73, 92.72], 12);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -92,6 +87,7 @@ function initMap(){
   }).addTo(map);
 }
 
+/* Fetch filter options (zone types) */
 async function fetchFilterOptions(){
   try {
     const res = await fetch('/dept/api/filter_options/');
@@ -117,6 +113,7 @@ async function fetchFilterOptions(){
   }
 }
 
+/* Read UI filter values */
 function readFilters(){
   const checked = Array.from(document.querySelectorAll('#zoneTypeList input[type=checkbox]:checked')).map(el=>el.value);
   const timeModeEl = document.querySelector('input[name=timeMode]:checked');
@@ -128,13 +125,16 @@ function readFilters(){
   return {zone_type_ids: checked, timeMode, customStart, customEnd, showTourists};
 }
 
+/* Clear map layers */
 function clearMap(){
-  zoneLayers.forEach(l=>map.removeLayer(l)); zoneLayers = [];
-  touristMarkers.forEach(m=>map.removeLayer(m)); touristMarkers = [];
-  // remove any search marker (left over)
+  zoneLayers.forEach(l=>{ try{ map.removeLayer(l); }catch(e){} });
+  zoneLayers = [];
+  touristMarkers.forEach(m=>{ try{ map.removeLayer(m); }catch(e){} });
+  touristMarkers = [];
   if(window._searchMarker){ try { map.removeLayer(window._searchMarker); } catch(e){} window._searchMarker = null; }
 }
 
+/* Apply filters: fetch alerts and tourists, draw on map */
 async function applyFilters(){
   const f = readFilters();
   clearMap();
@@ -157,7 +157,6 @@ async function applyFilters(){
     // draw alerts (as circles centered on zone lat/lng)
     if(Array.isArray(json.alerts)){
       json.alerts.forEach(a => {
-        // defensive access
         const lat = a.zone && a.zone.latitude;
         const lng = a.zone && a.zone.longitude;
         if(lat == null || lng == null) return;
@@ -168,7 +167,6 @@ async function applyFilters(){
         circle.addTo(map);
         zoneLayers.push(circle);
 
-        // attach click to open details panel for this alert
         circle.on('click', ()=> {
           renderAlertDetails(a);
         });
@@ -178,14 +176,12 @@ async function applyFilters(){
     // optionally draw latest tourists returned in the same response
     if(Array.isArray(json.latest_tourists)){
       json.latest_tourists.forEach(t => {
-        // robustly derive userid field (server returns userid in your view)
         const userId = t.userid || t.user_id || t.id || t.tourist_id;
         if(t.latitude == null || t.longitude == null) return;
         const m = L.marker([t.latitude, t.longitude]);
         const popupHtml = `<strong>${escapeHtml(t.name || 'Unknown')}</strong><br>${new Date(t.timestamp).toLocaleString()}`;
         m.bindPopup(popupHtml);
         m.on('click', () => {
-          // open popup first then fetch details
           m.openPopup();
           if(userId) showTouristDetails(userId);
         });
@@ -194,16 +190,15 @@ async function applyFilters(){
       });
     }
 
-    // render alerts in the list to the right
     renderAlertsList(Array.isArray(json.alerts) ? json.alerts : []);
   } catch (err) {
     console.error('applyFilters error', err);
-    // show a simple error in details panel
     const container = document.getElementById('detailsContent');
-    container.innerHTML = `<div class="empty-msg" style="color:#a00">Failed to load alerts or tourists.</div>`;
+    if(container) container.innerHTML = `<div class="empty-msg" style="color:#a00">Failed to load alerts or tourists.</div>`;
   }
 }
 
+/* Fetch and render tourist details into right panel */
 async function showTouristDetails(userId) {
   if(!userId) return;
   try {
@@ -216,7 +211,6 @@ async function showTouristDetails(userId) {
     }
     const data = await res.json();
 
-    // render in right panel
     const panel = document.getElementById("detailsContent");
     const t = data.tourist || {};
     const itin = data.current_itinerary;
@@ -261,6 +255,7 @@ async function showTouristDetails(userId) {
   }
 }
 
+/* Render single alert details into right panel */
 function renderAlertDetails(a){
   if(!a || !a.zone) return;
   const panel = document.getElementById('detailsContent');
@@ -274,22 +269,16 @@ function renderAlertDetails(a){
     </div>
   `;
 
-  // if alert includes tourist identifier, auto-fetch that too
   const possibleTouristId = a.tourist_id || (a.tourist && (a.tourist.userid || a.tourist.id));
   if(possibleTouristId){
-    // small delay so user sees alert details, then tourist details appended
     setTimeout(()=> showTouristDetails(possibleTouristId), 600);
   }
 }
 
+/* Render small alerts list in right panel */
 function renderAlertsList(alerts){
-  const container = document.getElementById('detailsPanel') && document.getElementById('detailsPanel').querySelector('#detailsContent');
-  // we also keep a separate list area for alerts in the dropdown; keep both simple
-  const alertsListContainer = document.getElementById('zoneTypeList') ? null : null; // not using separate alerts list element in this template
-  // We'll populate the details panel with a short list
   const listTarget = document.getElementById('detailsContent');
-  listTarget.innerHTML = ''; // clear
-
+  listTarget.innerHTML = '';
   if(!Array.isArray(alerts) || alerts.length === 0){
     listTarget.innerHTML = '<div class="empty-msg">No alerts found for selected filters.</div>';
     return;
@@ -311,13 +300,13 @@ function renderAlertsList(alerts){
   });
 }
 
-/* UI bindings */
+/* UI bindings (preserves old features, with improved dropdown behavior) */
 function bindUI(){
   const applyBtn = document.getElementById('applyFiltersBtn');
   if(applyBtn) applyBtn.addEventListener('click', applyFilters);
 
   const resetBtn = document.getElementById('resetFiltersBtn');
-  if(resetBtn) resetBtn.addEventListener('click', async ()=>{
+  if(resetBtn) resetBtn.addEventListener('click', async ()=> {
     document.querySelectorAll('#zoneTypeList input[type=checkbox]').forEach(cb=>cb.checked=false);
     const current = document.querySelector('input[name=timeMode][value=current]'); if(current) current.checked = true;
     const customInputs = document.getElementById('customTimeInputs'); if(customInputs) customInputs.style.display='none';
@@ -325,20 +314,42 @@ function bindUI(){
     await applyFilters();
   });
 
-  // dropdown toggling: openZone opens filters dropdown
+  // dropdown toggling: improved to avoid immediate close
   const openZone = document.getElementById('openZoneTypes');
-  const filtersDropdown = document.getElementById('filtersDropdown');
-  if(openZone && filtersDropdown){
-    openZone.addEventListener('click', ()=>{
-      const isHidden = filtersDropdown.getAttribute('aria-hidden') === 'true' || filtersDropdown.style.display === 'none';
-      filtersDropdown.setAttribute('aria-hidden', String(isHidden === true));
-      filtersDropdown.style.display = isHidden ? 'block' : 'none';
+  const dd = document.getElementById('filtersDropdown');
+  const topBar = document.getElementById('topBar');
+
+  if(openZone && dd){
+    // stop click bubbling from the toggle so document-level handler doesn't immediately close it
+    openZone.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isHidden = dd.getAttribute('aria-hidden') === 'true' || dd.style.display === 'none';
+      toggleFilters(isHidden);
     });
+
+    // prevent clicks inside dropdown from bubbling up (so interacting with checkboxes/buttons doesn't close it)
+    dd.addEventListener('click', (e) => e.stopPropagation());
+    dd.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
   }
 
+  // Close dropdown when clicking/touching outside (safe single handler)
+  const closeIfOutside = (e) => {
+    const ddVisible = dd && dd.getAttribute('aria-hidden') === 'false';
+    if(!ddVisible) return;
+    if(!(dd.contains(e.target) || topBar.contains(e.target))){
+      toggleFilters(false);
+    }
+  };
+  document.addEventListener('click', closeIfOutside);
+  document.addEventListener('touchstart', closeIfOutside, { passive: true });
+
+  // Close on Escape
+  document.addEventListener('keydown', (e) => { if(e.key === 'Escape') toggleFilters(false); });
+
+  // Tourists toggle button
   const toggleTouristsBtn = document.getElementById('toggleTouristsBtn');
   if(toggleTouristsBtn){
-    toggleTouristsBtn.addEventListener('click', async ()=>{
+    toggleTouristsBtn.addEventListener('click', async ()=> {
       const s = document.getElementById('showTourists');
       if(s){
         s.checked = !s.checked;
@@ -350,24 +361,14 @@ function bindUI(){
 
   const showTouristsEl = document.getElementById('showTourists');
   if(showTouristsEl){
-    showTouristsEl.addEventListener('change', async ()=>{
+    showTouristsEl.addEventListener('change', async ()=> {
       const toggleBtn = document.getElementById('toggleTouristsBtn');
       if(toggleBtn) toggleBtn.classList.toggle('active', showTouristsEl.checked);
       await applyFilters();
     });
   }
 
-  // hide dropdown when clicking outside
-  document.addEventListener('click', (e)=>{
-    const dd = document.getElementById('filtersDropdown');
-    const topBar = document.querySelector('.top-bar');
-    if(!dd || dd.getAttribute('aria-hidden') === 'true') return;
-    if(!dd.contains(e.target) && !topBar.contains(e.target)){
-      dd.setAttribute('aria-hidden','true');
-      dd.style.display = 'none';
-    }
-  });
-
+  // custom time inputs toggling
   document.querySelectorAll('input[name=timeMode]').forEach(r => r.addEventListener('change', (e)=>{
     const ct = document.getElementById('customTimeInputs'); if(ct) ct.style.display = (e.target.value === 'custom') ? 'block' : 'none';
   }));
