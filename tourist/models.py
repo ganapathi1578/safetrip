@@ -8,9 +8,8 @@ from datetime import timedelta
 # ─── Tourist ────────────────────────────────────────────────
 
 class Tourist(models.Model):
-    #profile_photo
     userid = models.CharField(max_length=50, unique=True)
-    name = models.CharField(max_length=100, blank=True)
+    name = models.CharField(max_length=100)
     email = models.EmailField(unique=True)
     gender = models.CharField(max_length=10, blank=True, null=True)
     dob = models.DateField(blank=True, null=True)
@@ -19,10 +18,18 @@ class Tourist(models.Model):
     is_mobile_verified = models.BooleanField(default=False)
     email_verified = models.BooleanField(default=False)
     aadhaar_no = models.CharField(max_length=12, blank=True, null=True)
-    aadhaar_verified = models.BooleanField(default=False)
     passport_no = models.CharField(max_length=20, blank=True, null=True)
     emergency_contact = models.CharField(max_length=15, blank=True, null=True)
+    password = models.CharField(max_length=128)  # hashed
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        if self.password and not self.password.startswith("pbkdf2_"):
+            self.password = make_password(self.password)
+        super().save(*args, **kwargs)
+
+    def check_password(self, raw_password):
+        return check_password(raw_password, self.password)
 
     def __str__(self):
         return f"{self.name} ({self.userid})"
@@ -65,7 +72,7 @@ class OTP(models.Model):
         ('mobile', 'Mobile'),
         ('email', 'Email'),
     )
-    tourist = models.ForeignKey(Tourist, on_delete=models.CASCADE, blank=True, null=True, related_name="otps")
+    tourist = models.ForeignKey(Tourist, on_delete=models.CASCADE, related_name="otps")
     code = models.CharField(max_length=6)  # 6-digit OTP
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()

@@ -7,6 +7,6 @@ def home(request):
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('dept/', include("dept.urls")),
-    path('', include("tourist.urls")),
+    path('', include("dept.urls")),
+    path('tour/', include("tourist.urls")),
 ]

@@ -2,7 +2,7 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    path("seed/", views.seed_aizawl_demo, name="seed_aizawl"),
+    #path("seed/", views.seed_aizawl_view, name="seed_aizawl"),
 
     path("request-otp/", views.request_otp, name="request_otp"), # Moblie
     path("verify-otp/", views.verify_otp, name="verify_otp"),
@@ -12,11 +12,4 @@ urlpatterns = [
 
     path("request-email-otp/", views.request_email_otp, name="request_email_otp"),  ## Email
     path("verify-email-otp/", views.verify_email_otp, name="verify_email_otp"),
-
-    path('get-tourist-details/', views.get_tourist_details, name='get_tourist_details'),
-    path('save-tourist-details/', views.save_tourist_details, name='save_tourist_details'),
-
-    path("save-tourist-location/", views.save_tourist_location, name="save_tourist_location"),
-    path("tourist/<str:userid>/", views.get_tourist_details, name="tourist_details"),
-
 ]
