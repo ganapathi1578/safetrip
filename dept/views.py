@@ -446,3 +446,21 @@ def get_tourist_details(request,userid):
         ]
 
     return JsonResponse(data, safe=False)
+
+def tourist_map_view(request,tourist_id):
+    #tourist_id = request.GET.get('tourist_id')
+    tourist = None
+    locations = []
+
+    if tourist_id:
+        tourist = get_object_or_404(Tourist, userid=tourist_id)
+        locations_qs = TouristLocation.objects.filter(tourist=tourist).order_by('timestamp')
+        locations = [
+            {"lat": float(loc.latitude), "lng": float(loc.longitude), "timestamp": loc.timestamp.isoformat()}
+            for loc in locations_qs
+        ]
+
+    return render(request, "dept/tourist_map.html", {
+        "tourist_id": tourist_id,
+        "locations": locations
+    })

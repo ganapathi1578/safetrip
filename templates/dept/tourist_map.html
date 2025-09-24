@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Tourist Tracker — Secure Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root{
+      --bg:#071029;            /* deep navy */
+      --panel:#0f1724;         /* darker panel */
+      --muted:#94a3b8;
+      --accent:#00d1ff;        /* cyan neon */
+      --accent-2:#ff7a59;      /* warm accent */
+      --glass: rgba(255,255,255,0.03);
+      --card-shadow: 0 6px 18px rgba(2,6,23,0.6);
+    }
+
+    html,body{height:100%;margin:0;font-family:Inter, "Segoe UI", Roboto, Arial; background:linear-gradient(180deg,#021026 0%, #071029 100%); color:#e6eef6;}
+    .app {
+      height:100vh; display:flex; flex-direction:column;
+    }
+
+    /* Top bar (Google-like) */
+    .topbar {
+      height:64px; display:flex; align-items:center; gap:12px;
+      padding:0 18px; background:linear-gradient(90deg, rgba(0,0,0,0.15), rgba(255,255,255,0.02));
+      border-bottom:1px solid rgba(255,255,255,0.03);
+      box-shadow: var(--card-shadow);
+      z-index: 1000;
+    }
+    .brand { display:flex; align-items:center; gap:10px; font-weight:700; color:var(--accent); }
+    .brand .logo {
+      width:36px; height:36px; border-radius:6px; display:inline-block;
+      background: linear-gradient(135deg,var(--accent), #6cf3ff);
+      box-shadow: 0 6px 18px rgba(0,209,255,0.12), inset 0 -6px 16px rgba(0,0,0,0.2);
+      transform: translateY(-1px);
+    }
+    .top-search {
+      margin-left:8px; display:flex; align-items:center; gap:8px; flex:1;
+    }
+    .search-input {
+      width:460px; max-width:50vw; display:flex; gap:8px; align-items:center;
+      background:var(--glass); border:1px solid rgba(255,255,255,0.04); padding:8px 10px; border-radius:8px;
+    }
+    .search-input input[type="search"]{
+      border:0; outline:0; background:transparent; color:var(--muted); font-size:14px; width:100%;
+    }
+    .btn {
+      background:linear-gradient(180deg,var(--accent), #0099b8);
+      color:#021026; border:0; padding:8px 12px; border-radius:8px; font-weight:600; cursor:pointer;
+      box-shadow: 0 6px 16px rgba(0,209,255,0.08);
+    }
+    .secondary {
+      background:transparent; color:var(--muted); border:1px solid rgba(255,255,255,0.03); padding:8px 10px; border-radius:8px;
+    }
+
+    /* Main layout: map + right panel */
+    .main {
+      flex:1; display:flex; min-height:0; /* allow map to flex */
+    }
+    #map { flex:1; min-width:0; } /* take remaining space */
+    .panel {
+      width:360px; max-width:40%; background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.04));
+      border-left:1px solid rgba(255,255,255,0.03); padding:14px; box-sizing:border-box; overflow:auto;
+    }
+
+    .panel h2 { margin:0 0 8px 0; color:var(--accent-2); font-size:18px; }
+    .controls { display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap; }
+    .control-item { display:flex; gap:8px; align-items:center; width:100%; }
+    label.small { font-size:12px; color:var(--muted); margin-right:6px; min-width:72px; }
+
+    input[type="datetime-local"], input[type="text"], .time-search {
+      background:transparent; border:1px solid rgba(255,255,255,0.04); padding:8px; border-radius:8px; color:var(--muted); width:100%;
+    }
+
+    .list {
+      margin-top:8px;
+      display:flex; flex-direction:column; gap:8px;
+    }
+
+    .list-item {
+      background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(0,0,0,0.02));
+      border-radius:10px; padding:10px; display:flex; justify-content:space-between; align-items:center;
+      box-shadow: 0 6px 14px rgba(2,6,23,0.5); border:1px solid rgba(255,255,255,0.02);
+      cursor:pointer; transition: transform .12s ease, box-shadow .12s ease;
+    }
+    .list-item:hover { transform: translateY(-4px); box-shadow: 0 10px 26px rgba(0,0,0,0.65); }
+    .list-item .meta { color:var(--muted); font-size:13px; }
+    .list-item .dot {
+      width:12px; height:12px; border-radius:50%; margin-right:10px; flex-shrink:0;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.35);
+    }
+    .dot.trail { background: linear-gradient(90deg,var(--accent), #4ee3ff); }
+    .dot.current { background: linear-gradient(90deg,var(--accent-2), #ffbf9f); box-shadow: 0 0 14px rgba(255,122,89,0.28); }
+
+    .small-muted { font-size:12px; color:var(--muted); }
+
+    /* Blinking marker style (divIcon) */
+    .blinking-marker {
+      width: 18px; height: 18px; border-radius:50%;
+      background: radial-gradient(circle at 30% 30%, #fff7c9 0%, var(--accent-2) 25%, #ff5a2e 60%);
+      box-shadow: 0 0 12px rgba(255,122,89,0.9), 0 6px 20px rgba(255,122,89,0.12);
+      border: 2px solid rgba(255,255,255,0.15);
+      animation: pulse 1.2s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(0.9); opacity: 1; }
+      50% { transform: scale(1.4); opacity: 0.45; }
+      100% { transform: scale(0.95); opacity: 1; }
+    }
+
+    /* responsive */
+    @media (max-width:900px){
+      .panel{ width:320px; }
+      .search-input { width:280px; }
+    }
+    @media (max-width:720px){
+      .main { flex-direction:column; }
+      #map{ height:55vh; width:100%; }
+      .panel{ width:100%; height:45vh; }
+      .search-input{ width:100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- top bar -->
+    <div class="topbar">
+      <div class="brand">
+        <span class="logo"></span>
+        <span>SafeTour</span>
+      </div>
+
+      <div class="top-search">
+        <div class="search-input" title="Search by time substring (e.g. '2025-09-24 10' or '10:15')">
+          <input id="timeTextSearch" type="search" placeholder="Search time (substring) — e.g. 2025-09-24 10:15 or 10:15" />
+          <button id="btnTextSearch" class="secondary">Filter</button>
+        </div>
+
+        <div style="display:flex; gap:8px; margin-left:8px;">
+          <input id="startTime" type="datetime-local" class="secondary" style="padding:8px; border-radius:8px;" title="Start time"/>
+          <input id="endTime" type="datetime-local" class="secondary" style="padding:8px; border-radius:8px;" title="End time"/>
+          <button id="btnRange" class="btn">Apply</button>
+        </div>
+      </div>
+
+      <div style="margin-left:auto; display:flex; gap:10px;">
+        <button id="btnReset" class="secondary">Reset</button>
+        <button id="btnCenter" class="btn">Center Trail</button>
+      </div>
+    </div>
+
+    <!-- main -->
+    <div class="main">
+      <div id="map"></div>
+
+      <aside class="panel">
+        <h2>Tourist Trail</h2>
+        <div class="small-muted">ID: <strong style="color:var(--accent)">{{ tourist_id }}</strong></div>
+
+        <div style="margin-top:12px; display:flex; gap:8px; align-items:center;">
+          <div style="flex:1;">
+            <div class="small-muted">Quick search</div>
+            <input id="miniSearch" type="text" class="time-search" placeholder="type time / substring and press Enter">
+          </div>
+          <div style="width:40px;">
+            <button id="btnClearMini" class="secondary" title="Clear">✕</button>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;">
+          <div class="small-muted">Tap a time to jump to that point</div>
+          <div id="timeList" class="list" role="list" aria-live="polite">
+            {% if locations %}
+              {% for loc in locations %}
+                <div class="list-item" data-lat="{{ loc.lat }}" data-lng="{{ loc.lng }}" data-ts="{{ loc.timestamp }}">
+                  <div style="display:flex; align-items:center;">
+                    <div class="dot {% if forloop.last %}current{% else %}trail{% endif %}"></div>
+                    <div>
+                      <div style="font-weight:700; color:#e8f9ff; font-size:14px;">{{ loc.timestamp }}</div>
+                      <div class="meta small-muted">Lat: {{ loc.lat }}, Lng: {{ loc.lng }}</div>
+                    </div>
+                  </div>
+                  <div style="margin-left:10px; font-size:12px; color:var(--muted);">→</div>
+                </div>
+              {% endfor %}
+            {% else %}
+              <div class="small-muted" style="padding:12px 6px;">No locations yet — submit a Tourist ID to view the trail.</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div style="margin-top:14px;">
+          <div class="small-muted">Legend</div>
+          <div style="display:flex; gap:10px; margin-top:6px; align-items:center;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <div style="width:12px; height:12px; border-radius:50%; background:linear-gradient(90deg,var(--accent), #4ee3ff)"></div><span class="small-muted">Trail points</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <div style="width:16px; height:16px; border-radius:50%; background:linear-gradient(90deg,var(--accent-2), #ffbf9f); box-shadow:0 6px 16px rgba(255,122,89,0.12)"></div><span class="small-muted">Current (glowing)</span>
+            </div>
+          </div>
+        </div>
+
+      </aside>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // ----- map init -----
+    const map = L.map('map', {preferCanvas:true}).setView([23.73, 92.72], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19, attribution: ''}).addTo(map);
+
+    // containers
+    let trailLayer = null;
+    let popupMarkers = [];
+    let blinkingMarker = null;
+
+    // parse locations passed from Django
+    {% if locations %}
+      const locations = {{ locations|safe }};
+    {% else %}
+      const locations = [];
+    {% endif %}
+
+    function buildTrail(){
+      clearTrail();
+      if(!locations || locations.length === 0) return;
+
+      const latlngs = locations.map(l => [l.lat, l.lng]);
+
+      // polyline (solid)
+      trailLayer = L.polyline(latlngs, { color: '#00d1ff', weight: 3, opacity: 0.9 }).addTo(map);
+
+      // small circle markers for each point
+      locations.forEach((l, i) => {
+        const cm = L.circleMarker([l.lat, l.lng], {
+          radius: 5,
+          fillColor: '#00d1ff',
+          color: '#022a34',
+          weight: 1,
+          opacity: 1,
+          fillOpacity: 0.9
+        }).addTo(map)
+          .bindPopup(`<div style="font-weight:700">${escapeHtml(l.timestamp)}</div><div style="color:#9fb9c9">Lat: ${l.lat}, Lng: ${l.lng}</div>`);
+        popupMarkers.push(cm);
+      });
+
+      // blinking marker for latest position
+      const last = locations[locations.length - 1];
+      const blinkIcon = L.divIcon({
+        className: '',
+        html: '<div class="blinking-marker"></div>',
+        iconSize: [24,24],
+        iconAnchor: [12,12]
+      });
+      blinkingMarker = L.marker([last.lat, last.lng], { icon: blinkIcon }).addTo(map)
+        .bindPopup(`<div style="font-weight:700">Current • ${escapeHtml(last.timestamp)}</div><div style="color:#9fb9c9">Lat: ${last.lat}, Lng: ${last.lng}</div>`);
+    }
+
+    function clearTrail(){
+      if(trailLayer){ try{ map.removeLayer(trailLayer); } catch(e){} trailLayer = null; }
+      popupMarkers.forEach(m => { try{ map.removeLayer(m); } catch(e){} });
+      popupMarkers = [];
+      if(blinkingMarker){ try{ map.removeLayer(blinkingMarker); } catch(e){} blinkingMarker = null; }
+    }
+
+    // initial build
+    buildTrail();
+    if(trailLayer) map.fitBounds(trailLayer.getBounds(), { padding: [40,40] });
+
+    // ----- UI: time list click handler -----
+    const list = document.getElementById('timeList');
+    if(list){
+      list.addEventListener('click', (ev) => {
+        let el = ev.target;
+        // climb up to .list-item
+        while(el && !el.classList.contains('list-item')) el = el.parentElement;
+        if(!el) return;
+        const lat = parseFloat(el.getAttribute('data-lat')), lng = parseFloat(el.getAttribute('data-lng'));
+        const ts  = el.getAttribute('data-ts');
+        if(isFinite(lat) && isFinite(lng)){
+          map.flyTo([lat, lng], 20, { duration: 0.7 });
+          // find and open the corresponding popup marker
+          const match = popupMarkers.find(pm => {
+            const p = pm.getLatLng();
+            return Math.abs(p.lat - lat) < 1e-6 && Math.abs(p.lng - lng) < 1e-6;
+          });
+          if(match) match.openPopup();
+        }
+      });
+    }
+
+    // ----- search / filter functions -----
+    function filterByText(sub){
+      sub = (sub || '').trim().toLowerCase();
+      const items = Array.from(document.querySelectorAll('.list-item'));
+      if(!sub){
+        items.forEach(it => it.style.display = '');
+        return;
+      }
+      items.forEach(it => {
+        const ts = (it.getAttribute('data-ts') || '').toLowerCase();
+        const latlng = (it.getAttribute('data-lat') + ' ' + it.getAttribute('data-lng')).toLowerCase();
+        it.style.display = (ts.includes(sub) || latlng.includes(sub)) ? '' : 'none';
+      });
+    }
+
+    function filterByRange(startISO, endISO){
+      const items = Array.from(document.querySelectorAll('.list-item'));
+      const start = startISO ? new Date(startISO) : null;
+      const end = endISO ? new Date(endISO) : null;
+      items.forEach(it => {
+        const ts = it.getAttribute('data-ts');
+        if(!ts){ it.style.display = ''; return; }
+        const dt = new Date(ts);
+        let show = true;
+        if(start && dt < start) show = false;
+        if(end && dt > end) show = false;
+        it.style.display = show ? '' : 'none';
+      });
+    }
+
+    // wire topbar search
+    document.getElementById('btnTextSearch').addEventListener('click', (e) => {
+      e.preventDefault();
+      const val = document.getElementById('timeTextSearch').value;
+      filterByText(val);
+    });
+    document.getElementById('timeTextSearch').addEventListener('keydown', (e) => {
+      if(e.key === 'Enter'){ e.preventDefault(); document.getElementById('btnTextSearch').click(); }
+    });
+
+    document.getElementById('btnRange').addEventListener('click', (e) => {
+      e.preventDefault();
+      const s = document.getElementById('startTime').value;
+      const t = document.getElementById('endTime').value;
+      // convert to ISO if present (datetime-local returns "YYYY-MM-DDTHH:MM")
+      const sISO = s ? new Date(s).toISOString() : null;
+      const tISO = t ? new Date(t).toISOString() : null;
+      filterByRange(sISO, tISO);
+    });
+
+    document.getElementById('btnReset').addEventListener('click', () => {
+      document.getElementById('timeTextSearch').value = '';
+      document.getElementById('startTime').value = '';
+      document.getElementById('endTime').value = '';
+      const items = document.querySelectorAll('.list-item'); items.forEach(it => it.style.display = '');
+    });
+
+    document.getElementById('btnCenter').addEventListener('click', () => {
+      if(trailLayer) map.fitBounds(trailLayer.getBounds(), { padding: [40,40] });
+    });
+
+    // mini search in panel
+    document.getElementById('miniSearch').addEventListener('keydown', (e) => {
+      if(e.key === 'Enter'){ filterByText(e.target.value); }
+    });
+    document.getElementById('btnClearMini').addEventListener('click', () => {
+      document.getElementById('miniSearch').value = ''; filterByText('');
+    });
+
+    // small helper
+    function escapeHtml(s){ if(!s) return ''; return String(s).replace(/[&<>"']/g, (m)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[m])); }
+
+  </script>
+</body>
+</html>

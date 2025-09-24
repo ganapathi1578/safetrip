@@ -19,4 +19,5 @@ urlpatterns = [
     path("save-tourist-location/", views.save_tourist_location, name="save_tourist_location"),
     path("tourist/<str:userid>/", views.get_tourist_details, name="tourist_details"),
 
+     
 ]

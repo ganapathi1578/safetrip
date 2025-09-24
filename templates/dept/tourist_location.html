@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tourist Tracker</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    body, html {
+      margin: 0; padding: 0; height: 100%; font-family: Arial, sans-serif;
+    }
+    #map { height: 100%; width: 70%; float: left; }
+    .sidebar {
+      width: 30%; height: 100%; float: left; background: #f8f8f8; padding: 10px; box-sizing: border-box;
+      overflow-y: auto;
+    }
+    .sidebar h2 { margin-top: 0; font-size: 18px; }
+    .marker-info { font-size: 14px; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid #ddd; }
+    .controls { margin-bottom: 10px; }
+    button { padding: 6px 10px; font-size: 14px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="sidebar">
+    <h2>Tourist Details</h2>
+    <div class="controls">
+      <input type="number" id="touristId" placeholder="Tourist ID" style="width:60%">
+      <button onclick="showTouristPath()">Show Path</button>
+    </div>
+    <div id="detailsContent">
+      <div class="marker-info">Enter a Tourist ID and click "Show Path".</div>
+    </div>
+  </div>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    let map = L.map('map').setView([23.73, 92.72], 12);
+    let touristMarkers = [];
+    let touristPolyline = null;
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19
+    }).addTo(map);
+
+    function clearMap() {
+      touristMarkers.forEach(m => map.removeLayer(m));
+      touristMarkers = [];
+      if (touristPolyline) {
+        map.removeLayer(touristPolyline);
+        touristPolyline = null;
+      }
+    }
+
+    async function showTouristPath() {
+      const touristId = document.getElementById('touristId').value;
+      if (!touristId) return alert("Enter a Tourist ID");
+
+      clearMap();
+      const detailsDiv = document.getElementById('detailsContent');
+      detailsDiv.innerHTML = "Loading...";
+
+      try {
+        const res = await fetch(`/tourist/${encodeURIComponent(touristId)}/locations/`);
+        if (!res.ok) throw new Error("Failed to fetch locations");
+        const data = await res.json();
+        const locations = data.locations;
+
+        if (!locations || locations.length === 0) {
+          detailsDiv.innerHTML = "No locations found for this tourist.";
+          return;
+        }
+
+        // Plot polyline
+        const latlngs = locations.map(loc => [loc.latitude, loc.longitude]);
+        touristPolyline = L.polyline(latlngs, {color: 'blue', weight: 3, opacity: 0.7}).addTo(map);
+        map.fitBounds(touristPolyline.getBounds());
+
+        // Add markers
+        latlngs.forEach((latlng, idx) => {
+          const marker = L.circleMarker(latlng, {radius: 4, color: 'red', fillColor: 'red', fillOpacity: 0.7})
+            .bindPopup(`Time: ${locations[idx].timestamp}`)
+            .addTo(map);
+          touristMarkers.push(marker);
+        });
+
+        // Update sidebar
+        detailsDiv.innerHTML = `<div><strong>Tourist ID:</strong> ${touristId}</div>`;
+        locations.forEach(loc => {
+          const div = document.createElement('div');
+          div.className = 'marker-info';
+          div.innerHTML = `Lat: ${loc.latitude}, Lng: ${loc.longitude} <br> Time: ${loc.timestamp}`;
+          detailsDiv.appendChild(div);
+        });
+
+      } catch (err) {
+        console.error(err);
+        detailsDiv.innerHTML = `<div style="color:red">Error fetching locations.</div>`;
+      }
+    }
+  </script>
+</body>
+</html>
