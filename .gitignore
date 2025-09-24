@@ -12,7 +12,7 @@ db.sqlite3
 *.pot
 *.pyc
 *.mo
-*.sqlite3
+
 
 # Environment
 .env
