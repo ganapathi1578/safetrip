@@ -8,6 +8,7 @@
   <title>SafeTour — Map</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="{% static 'css/zone_management.css' %}" />
+
 </head>
 <body>
   <div id="map"></div>
@@ -23,12 +24,12 @@
     <div class="top-center">
       <div class="pill-group">
         <button class="pill" id="openZoneTypes">Filters</button>
-        <!-- <button class="pill" id="openTimeFilter">Time</button> -->
         <button class="pill" id="toggleTouristsBtn">Tourists</button>
         <button class="pill" id="applyFiltersBtn">Apply</button>
         <button class="pill" id="resetFiltersBtn">Reset</button>
       </div>
     </div>
+    <!-- Filters dropdown (hidden by default using aria-hidden) -->
     <div class="filters-dropdown" id="filtersDropdown" aria-hidden="true">
       <h4>Filters</h4>
       <div id="zoneTypeContainer">
@@ -44,30 +45,46 @@
           <label><input type="radio" name="timeMode" value="custom"> Custom</label>
         </div>
         <div id="customTimeInputs" style="display:none; margin-top:6px;">
-          <input type="time" id="customStart"> to <input type="time" id="customEnd">
+          <input type="time" id="customStart"> to 
+          <input type="time" id="customEnd">
         </div>
       </div>
+    </div>
+
 
       <div style="margin-top:8px;">
         <label><input type="checkbox" id="showTourists"> Show Tourists (latest)</label>
       </div>
     </div>
   </div>
+    
 
-  <!-- Right side alerts panel -->
-  <aside class="alerts-panel" id="alertsPanel">
-    <div class="alerts-header"><strong>Alerts</strong></div>
-    <div id="alertsList" class="alerts-list">
-      <!-- Alerts will be rendered here -->
+  <!-- Right side details panel -->
+  <aside class="details-panel" id="detailsPanel">
+    <div class="details-header">Details</div>
+    <div id="detailsContent" class="details-content">
+      <div class="empty-msg">Select a marker or alert to view details.</div>
     </div>
   </aside>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="{% static 'js/safetour.js' %}"></script>
-
   <script>
+/* ---------- main JS (fixed) ---------- */
 let map, zoneLayers = [], touristMarkers = [];
+const filtersDropdown = document.getElementById("filtersDropdown");
 
+  // Example: open it manually
+  function toggleFilters(show) {
+    filtersDropdown.setAttribute("aria-hidden", show ? "false" : "true");
+    filtersDropdown.style.display = show ? "block" : "none";
+  }
+
+  // Hide when clicking outside
+  document.addEventListener("click", (event) => {
+    if (!filtersDropdown.contains(event.target) && filtersDropdown.getAttribute("aria-hidden") === "false") {
+      toggleFilters(false);
+    }
+  });
 function initMap(){
   map = L.map('map').setView([23.73, 92.72], 12);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -76,31 +93,46 @@ function initMap(){
 }
 
 async function fetchFilterOptions(){
-  const res = await fetch('/dept/api/filter_options/');
-  const data = await res.json();
-  const container = document.getElementById('zoneTypeList');
-  container.innerHTML = '';
-  data.zone_types.forEach(zt => {
-    const id = 'zt_' + zt.id;
-    const div = document.createElement('div');
-    div.className = 'zone-type-item';
-    div.innerHTML = `<label><input type="checkbox" value="${zt.id}" id="${id}"> ${zt.name} <span style="color:#888; font-size:12px"> — ${zt.zone_name}</span></label>`;
-    container.appendChild(div);
-  });
+  try {
+    const res = await fetch('/dept/api/filter_options/');
+    if(!res.ok) throw new Error('Failed to load filter options');
+    const data = await res.json();
+    const container = document.getElementById('zoneTypeList');
+    container.innerHTML = '';
+    if(!data.zone_types || !data.zone_types.length){
+      container.innerHTML = '<div style="color:#666">No zone types found.</div>';
+      return;
+    }
+    data.zone_types.forEach(zt => {
+      const id = 'zt_' + zt.id;
+      const div = document.createElement('div');
+      div.className = 'zone-type-item';
+      div.innerHTML = `<label><input type="checkbox" value="${zt.id}" id="${id}"> ${escapeHtml(zt.name)} <span style="color:#888; font-size:12px"> — ${escapeHtml(zt.zone_name || '')}</span></label>`;
+      container.appendChild(div);
+    });
+  } catch (err) {
+    console.error('fetchFilterOptions error', err);
+    const container = document.getElementById('zoneTypeList');
+    if(container) container.innerHTML = '<div style="color:#a00">Failed to load zone types.</div>';
+  }
 }
 
 function readFilters(){
   const checked = Array.from(document.querySelectorAll('#zoneTypeList input[type=checkbox]:checked')).map(el=>el.value);
-  const timeMode = document.querySelector('input[name=timeMode]:checked').value;
-  const customStart = document.getElementById('customStart').value;
-  const customEnd = document.getElementById('customEnd').value;
-  const showTourists = document.getElementById('showTourists') ? document.getElementById('showTourists').checked : false;
+  const timeModeEl = document.querySelector('input[name=timeMode]:checked');
+  const timeMode = timeModeEl ? timeModeEl.value : 'current';
+  const customStart = (document.getElementById('customStart') || {}).value || '';
+  const customEnd = (document.getElementById('customEnd') || {}).value || '';
+  const showTouristsEl = document.getElementById('showTourists');
+  const showTourists = showTouristsEl ? showTouristsEl.checked : false;
   return {zone_type_ids: checked, timeMode, customStart, customEnd, showTourists};
 }
 
 function clearMap(){
   zoneLayers.forEach(l=>map.removeLayer(l)); zoneLayers = [];
   touristMarkers.forEach(m=>map.removeLayer(m)); touristMarkers = [];
+  // remove any search marker (left over)
+  if(window._searchMarker){ try { map.removeLayer(window._searchMarker); } catch(e){} window._searchMarker = null; }
 }
 
 async function applyFilters(){
@@ -117,50 +149,173 @@ async function applyFilters(){
   }
   if(f.showTourists) params.set('include_latest_tourists','1');
 
-  const res = await fetch('/dept/api/alerts/?' + params.toString());
-  const json = await res.json();
+  try {
+    const res = await fetch('/dept/api/alerts/?' + params.toString());
+    if(!res.ok) throw new Error('alerts API failed: ' + res.status);
+    const json = await res.json();
 
-  // draw alerts (as circles centered on zone lat/lng)
-  json.alerts.forEach(a => {
-    const radius = a.zone.radius || 300;
-    const circle = L.circle([a.zone.latitude, a.zone.longitude], {radius: radius, weight:2});
-    circle.bindPopup(`<strong>${a.zone.name}</strong><br>${a.zone_type.name}<br>${a.start_time} - ${a.end_time}<br>Risk: ${a.risk_points}`);
-    circle.addTo(map);
-    zoneLayers.push(circle);
-  });
+    // draw alerts (as circles centered on zone lat/lng)
+    if(Array.isArray(json.alerts)){
+      json.alerts.forEach(a => {
+        // defensive access
+        const lat = a.zone && a.zone.latitude;
+        const lng = a.zone && a.zone.longitude;
+        if(lat == null || lng == null) return;
+        const radius = (a.zone && a.zone.radius) || 300;
+        const circle = L.circle([lat, lng], {radius: radius, weight:2});
+        const popupHtml = `<strong>${escapeHtml(a.zone.name || 'Zone')}</strong><br>${escapeHtml(a.zone_type && a.zone_type.name || '')}<br>${escapeHtml(a.start_time || '')} - ${escapeHtml(a.end_time || '')}<br>Risk: ${escapeHtml(String(a.risk_points || ''))}`;
+        circle.bindPopup(popupHtml);
+        circle.addTo(map);
+        zoneLayers.push(circle);
 
-  // optionally draw latest tourists returned in the same response
-  if(json.latest_tourists){
-    json.latest_tourists.forEach(t => {
-      const m = L.marker([t.latitude, t.longitude]);
-      m.bindPopup(`<strong>${t.name}</strong><br>${new Date(t.timestamp).toLocaleString()}`);
-      m.addTo(map);
-      touristMarkers.push(m);
-    });
+        // attach click to open details panel for this alert
+        circle.on('click', ()=> {
+          renderAlertDetails(a);
+        });
+      });
+    }
+
+    // optionally draw latest tourists returned in the same response
+    if(Array.isArray(json.latest_tourists)){
+      json.latest_tourists.forEach(t => {
+        // robustly derive userid field (server returns userid in your view)
+        const userId = t.userid || t.user_id || t.id || t.tourist_id;
+        if(t.latitude == null || t.longitude == null) return;
+        const m = L.marker([t.latitude, t.longitude]);
+        const popupHtml = `<strong>${escapeHtml(t.name || 'Unknown')}</strong><br>${new Date(t.timestamp).toLocaleString()}`;
+        m.bindPopup(popupHtml);
+        m.on('click', () => {
+          // open popup first then fetch details
+          m.openPopup();
+          if(userId) showTouristDetails(userId);
+        });
+        m.addTo(map);
+        touristMarkers.push(m);
+      });
+    }
+
+    // render alerts in the list to the right
+    renderAlertsList(Array.isArray(json.alerts) ? json.alerts : []);
+  } catch (err) {
+    console.error('applyFilters error', err);
+    // show a simple error in details panel
+    const container = document.getElementById('detailsContent');
+    container.innerHTML = `<div class="empty-msg" style="color:#a00">Failed to load alerts or tourists.</div>`;
   }
+}
 
-  renderAlertsList(json.alerts);
+async function showTouristDetails(userId) {
+  if(!userId) return;
+  try {
+    const res = await fetch(`/dept/tourist/${encodeURIComponent(userId)}/details/`);
+    if (!res.ok) {
+      console.error("Failed to fetch tourist details", res.status);
+      const panel = document.getElementById("detailsContent");
+      panel.innerHTML = `<div class="empty-msg" style="color:#a00">Failed to load details (status ${res.status}).</div>`;
+      return;
+    }
+    const data = await res.json();
+
+    // render in right panel
+    const panel = document.getElementById("detailsContent");
+    const t = data.tourist || {};
+    const itin = data.current_itinerary;
+    const trips = Array.isArray(data.trips) ? data.trips : [];
+
+    panel.innerHTML = `
+      <div style="font-weight:700; font-size:16px; margin-bottom:6px;">${escapeHtml(t.name || t.userid || 'Tourist')}</div>
+
+      <div style="font-size:13px; color:#444; margin-bottom:6px;">
+        <div><strong>Userid:</strong> ${escapeHtml(t.userid || '')}</div>
+        <div><strong>Email:</strong> ${escapeHtml(t.email || 'N/A')}</div>
+        <div><strong>Mobile:</strong> ${escapeHtml(t.mobile_no || 'N/A')}</div>
+        <div><strong>DOB:</strong> ${escapeHtml(t.dob || 'N/A')}</div>
+        <div><strong>Aadhaar:</strong> ${escapeHtml(t.aadhaar_no || 'N/A')}</div>
+        <div><strong>Passport:</strong> ${escapeHtml(t.passport_no || 'N/A')}</div>
+      </div>
+
+      <div style="border-top:1px solid #eee; padding-top:8px; margin-top:8px;">
+        <div style="font-weight:600; margin-bottom:6px;">Current itinerary</div>
+        ${itin ? `
+          <div style="font-size:13px;">
+            <div><strong>${escapeHtml(itin.title)}</strong></div>
+            <div>${escapeHtml(itin.start_date || '')} → ${escapeHtml(itin.end_date || '')}</div>
+            <div>${escapeHtml(itin.base_location || '')}</div>
+          </div>
+        ` : `<div style="color:#666; font-size:13px;">No active itinerary</div>`}
+      </div>
+
+      <div style="border-top:1px solid #eee; padding-top:8px; margin-top:8px;">
+        <div style="font-weight:600; margin-bottom:6px;">Trips</div>
+        ${trips.length ? `
+          <ul style="padding-left:18px; margin:0;">
+            ${trips.map(trip => `<li style="margin-bottom:6px;"><strong>${escapeHtml(trip.trip_title)}</strong><br><small>${escapeHtml(trip.start_location)} → ${escapeHtml(trip.end_location)} • ${escapeHtml(trip.start_time)} → ${escapeHtml(trip.end_time)}</small></li>`).join('')}
+          </ul>
+        ` : `<div style="color:#666; font-size:13px;">No trips for current itinerary</div>`}
+      </div>
+    `;
+  } catch (err) {
+    console.error('showTouristDetails error', err);
+    const panel = document.getElementById("detailsContent");
+    panel.innerHTML = `<div class="empty-msg" style="color:#a00">Error loading details.</div>`;
+  }
+}
+
+function renderAlertDetails(a){
+  if(!a || !a.zone) return;
+  const panel = document.getElementById('detailsContent');
+  panel.innerHTML = `
+    <div style="font-weight:700; margin-bottom:6px;">${escapeHtml(a.zone.name || 'Alert')}</div>
+    <div style="font-size:13px; color:#444;">
+      <div><strong>Type:</strong> ${escapeHtml(a.zone_type && a.zone_type.name || 'N/A')}</div>
+      <div><strong>When:</strong> ${escapeHtml(a.start_time || '')} → ${escapeHtml(a.end_time || '')}</div>
+      <div><strong>Risk:</strong> ${escapeHtml(String(a.risk_points || ''))}</div>
+      <div style="margin-top:8px;"><strong>Description:</strong><div style="color:#666; margin-top:6px;">${escapeHtml(a.description || 'No description')}</div></div>
+    </div>
+  `;
+
+  // if alert includes tourist identifier, auto-fetch that too
+  const possibleTouristId = a.tourist_id || (a.tourist && (a.tourist.userid || a.tourist.id));
+  if(possibleTouristId){
+    // small delay so user sees alert details, then tourist details appended
+    setTimeout(()=> showTouristDetails(possibleTouristId), 600);
+  }
 }
 
 function renderAlertsList(alerts){
-  const container = document.getElementById('alertsList');
-  container.innerHTML = '';
-  if(!alerts.length){ container.innerHTML = '<div class="alert-item">No alerts found for selected filters.</div>'; return; }
-  alerts.forEach(a=>{
-    const div = document.createElement('div');
-    div.className = 'alert-item';
-    div.innerHTML = `<div><strong>${a.zone.name} — ${a.zone_type.name}</strong></div>
-                     <div class="meta">${a.start_time} - ${a.end_time} • Risk: ${a.risk_points}</div>`;
-    div.addEventListener('click', ()=>{
-      map.flyTo([a.zone.latitude, a.zone.longitude], 15, {duration:0.6});
+  const container = document.getElementById('detailsPanel') && document.getElementById('detailsPanel').querySelector('#detailsContent');
+  // we also keep a separate list area for alerts in the dropdown; keep both simple
+  const alertsListContainer = document.getElementById('zoneTypeList') ? null : null; // not using separate alerts list element in this template
+  // We'll populate the details panel with a short list
+  const listTarget = document.getElementById('detailsContent');
+  listTarget.innerHTML = ''; // clear
+
+  if(!Array.isArray(alerts) || alerts.length === 0){
+    listTarget.innerHTML = '<div class="empty-msg">No alerts found for selected filters.</div>';
+    return;
+  }
+
+  alerts.forEach(a => {
+    const node = document.createElement('div');
+    node.className = 'alert-item';
+    const title = a.zone && a.zone.name ? a.zone.name : 'Alert';
+    const meta = `${a.start_time || ''} - ${a.end_time || ''} • Risk: ${a.risk_points || ''}`;
+    node.innerHTML = `<div><strong>${escapeHtml(title)}</strong></div><div class="meta">${escapeHtml(meta)}</div>`;
+    node.addEventListener('click', () => {
+      if(a.zone && a.zone.latitude != null && a.zone.longitude != null){
+        map.flyTo([a.zone.latitude, a.zone.longitude], 15, {duration:0.6});
+      }
+      renderAlertDetails(a);
     });
-    container.appendChild(div);
+    listTarget.appendChild(node);
   });
 }
 
+/* UI bindings */
 function bindUI(){
   const applyBtn = document.getElementById('applyFiltersBtn');
   if(applyBtn) applyBtn.addEventListener('click', applyFilters);
+
   const resetBtn = document.getElementById('resetFiltersBtn');
   if(resetBtn) resetBtn.addEventListener('click', async ()=>{
     document.querySelectorAll('#zoneTypeList input[type=checkbox]').forEach(cb=>cb.checked=false);
@@ -170,51 +325,56 @@ function bindUI(){
     await applyFilters();
   });
 
-  // open zone types / time sections
+  // dropdown toggling: openZone opens filters dropdown
   const openZone = document.getElementById('openZoneTypes');
-  const openTime = document.getElementById('openTimeFilter');
-  const toggleTouristsBtn = document.getElementById('toggleTouristsBtn');
   const filtersDropdown = document.getElementById('filtersDropdown');
-  // zone button: open dropdown and scroll to zone list
-  if(openZone) openZone.addEventListener('click', ()=>{
-    if(filtersDropdown) filtersDropdown.setAttribute('aria-hidden','false');
-    const z = document.getElementById('zoneTypeList'); if(z) z.scrollIntoView({behavior:'smooth', block:'start'});
-  });
-  // time button: open dropdown and scroll to time controls
-  if(openTime) openTime.addEventListener('click', ()=>{
-    if(filtersDropdown) filtersDropdown.setAttribute('aria-hidden','false');
-    const t = document.getElementById('timeContainer'); if(t) t.scrollIntoView({behavior:'smooth', block:'center'});
-  });
-  // tourists button: toggle the showTourists checkbox, visually indicate, and apply filters
-  if(toggleTouristsBtn) toggleTouristsBtn.addEventListener('click', async ()=>{
-    const s = document.getElementById('showTourists');
-    if(s){ s.checked = !s.checked; toggleTouristsBtn.classList.toggle('active', s.checked); await applyFilters(); }
-  });
-  // ensure checkbox and pill stay in sync; changing checkbox updates pill and triggers filters
+  if(openZone && filtersDropdown){
+    openZone.addEventListener('click', ()=>{
+      const isHidden = filtersDropdown.getAttribute('aria-hidden') === 'true' || filtersDropdown.style.display === 'none';
+      filtersDropdown.setAttribute('aria-hidden', String(isHidden === true));
+      filtersDropdown.style.display = isHidden ? 'block' : 'none';
+    });
+  }
+
+  const toggleTouristsBtn = document.getElementById('toggleTouristsBtn');
+  if(toggleTouristsBtn){
+    toggleTouristsBtn.addEventListener('click', async ()=>{
+      const s = document.getElementById('showTourists');
+      if(s){
+        s.checked = !s.checked;
+        toggleTouristsBtn.classList.toggle('active', s.checked);
+        await applyFilters();
+      }
+    });
+  }
+
   const showTouristsEl = document.getElementById('showTourists');
   if(showTouristsEl){
     showTouristsEl.addEventListener('change', async ()=>{
-      toggleTouristsBtn.classList.toggle('active', showTouristsEl.checked);
+      const toggleBtn = document.getElementById('toggleTouristsBtn');
+      if(toggleBtn) toggleBtn.classList.toggle('active', showTouristsEl.checked);
       await applyFilters();
     });
   }
 
-  // close when clicking outside
+  // hide dropdown when clicking outside
   document.addEventListener('click', (e)=>{
     const dd = document.getElementById('filtersDropdown');
     const topBar = document.querySelector('.top-bar');
     if(!dd || dd.getAttribute('aria-hidden') === 'true') return;
-    if(!dd.contains(e.target) && !topBar.contains(e.target)) dd.setAttribute('aria-hidden','true');
+    if(!dd.contains(e.target) && !topBar.contains(e.target)){
+      dd.setAttribute('aria-hidden','true');
+      dd.style.display = 'none';
+    }
   });
 
-  document.querySelectorAll('input[name=timeMode]').forEach(r=> r.addEventListener('change', (e)=>{
-    const ct = document.getElementById('customTimeInputs'); if(ct) ct.style.display = (e.target.value==='custom') ? 'block' : 'none';
+  document.querySelectorAll('input[name=timeMode]').forEach(r => r.addEventListener('change', (e)=>{
+    const ct = document.getElementById('customTimeInputs'); if(ct) ct.style.display = (e.target.value === 'custom') ? 'block' : 'none';
   }));
 
-  // search handler (Nominatim) — pans map to first result and places temporary marker
+  // search handler (Nominatim)
   const searchInput = document.querySelector('.search-box input[type=search]');
   const searchBtn = document.querySelector('.search-box .search-btn');
-  let searchMarker = null;
   async function doSearch(){
     const q = searchInput && searchInput.value && searchInput.value.trim();
     if(!q) return;
@@ -226,14 +386,26 @@ function bindUI(){
       const first = results[0];
       const lat = parseFloat(first.lat), lon = parseFloat(first.lon);
       map.flyTo([lat, lon], 15, {duration:0.7});
-      if(searchMarker) map.removeLayer(searchMarker);
-      searchMarker = L.marker([lat, lon]).addTo(map).bindPopup(first.display_name).openPopup();
+      if(window._searchMarker) { try { map.removeLayer(window._searchMarker); } catch(e){} }
+      window._searchMarker = L.marker([lat, lon]).addTo(map).bindPopup(first.display_name).openPopup();
     }catch(e){ console.error('search error', e); }
   }
   if(searchBtn) searchBtn.addEventListener('click', doSearch);
-  if(searchInput) searchInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') doSearch(); });
+  if(searchInput) searchInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') { e.preventDefault(); doSearch(); } });
 }
 
+/* small helper to escape HTML when injecting strings */
+function escapeHtml(str){
+  if(str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/* startup */
 window.addEventListener('DOMContentLoaded', async ()=>{
   initMap();
   await fetchFilterOptions();

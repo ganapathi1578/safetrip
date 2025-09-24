@@ -203,7 +203,7 @@ def zone_detail_json(request, zone_id):
                 "risk_points": a.risk_points,
             })
         types.append({
-            "id": t.id,
+            "id": t.userid,
             "name": t.name,
             "alerts": alerts
         })
@@ -339,7 +339,7 @@ def api_alerts(request):
         for t in annot:
             if t.latest_lat and t.latest_lng:
                 tourists.append({
-                    "tourist_id": t.id,
+                    "tourist_id": t.userid,
                     "name": t.name,
                     "latitude": float(t.latest_lat),
                     "longitude": float(t.latest_lng),
@@ -364,7 +364,7 @@ def api_tourists_latest(request):
     for t in annot:
         if t.latest_lat and t.latest_lng:
             tourists.append({
-                "tourist_id": t.id,
+                "tourist_id": t.userid,
                 "userid": t.userid,
                 "name": t.name,
                 "latitude": float(t.latest_lat),
@@ -372,3 +372,77 @@ def api_tourists_latest(request):
                 "timestamp": t.latest_time.isoformat() if t.latest_time else None,
             })
     return JsonResponse({"tourists": tourists})
+
+
+
+# views.py
+from django.http import JsonResponse
+from django.utils import timezone
+from django.views.decorators.http import require_GET
+from django.shortcuts import get_object_or_404
+
+from tourist.models import Tourist, Itinerary
+
+
+@require_GET
+def get_tourist_details(request,userid):
+    """
+    Return tourist details, current itinerary (if any), and trips under that itinerary.
+    """
+
+    # fetch tourist or 404
+    tourist = get_object_or_404(Tourist, userid=userid)
+
+    # check for current itinerary
+    today = timezone.now().date()
+    current_itinerary = (
+        Itinerary.objects
+        .filter(tourist=tourist, start_date__lte=today, end_date__gte=today)
+        .order_by("-created_at")
+        .first()
+    )
+
+    # prepare response
+    data = {
+        "tourist": {
+            "userid": tourist.userid,
+            "name": tourist.name,
+            "email": tourist.email,
+            "gender": tourist.gender,
+            "dob": str(tourist.dob) if tourist.dob else None,
+            "blood_group": tourist.blood_group,
+            "mobile_no": tourist.mobile_no,
+            "is_mobile_verified": tourist.is_mobile_verified,
+            "email_verified": tourist.email_verified,
+            "aadhaar_no": tourist.aadhaar_no,
+            "aadhaar_verified": tourist.aadhaar_verified,
+            "passport_no": tourist.passport_no,
+            "emergency_contact": tourist.emergency_contact,
+            "created_at": tourist.created_at.isoformat(),
+        },
+        "current_itinerary": None,
+        "trips": [],
+    }
+
+    if current_itinerary:
+        data["current_itinerary"] = {
+            "title": current_itinerary.title,
+            "start_date": str(current_itinerary.start_date),
+            "end_date": str(current_itinerary.end_date),
+            "base_location": current_itinerary.base_location,
+            "created_at": current_itinerary.created_at.isoformat(),
+        }
+        # include trips
+        data["trips"] = [
+            {
+                "trip_title": trip.trip_title,
+                "start_location": trip.start_location,
+                "end_location": trip.end_location,
+                "start_time": trip.start_time.isoformat(),
+                "end_time": trip.end_time.isoformat(),
+                "created_at": trip.created_at.isoformat(),
+            }
+            for trip in current_itinerary.trips.all().order_by("start_time")
+        ]
+
+    return JsonResponse(data, safe=False)

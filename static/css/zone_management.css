@@ -65,9 +65,9 @@ html,body,#map{ height:100%; margin:0; padding:0; font-family: Inter, system-ui,
 /* Right side alerts panel */
 .alerts-panel{
   position: absolute;
-  right: 12px;
-  top: 86px;
-  width: 320px;
+  left: 10px;
+  top: 90px;
+  width: 200px;
   max-width: calc(100% - 24px);
   background: var(--card-bg);
   border-radius: 10px;
@@ -78,6 +78,30 @@ html,body,#map{ height:100%; margin:0; padding:0; font-family: Inter, system-ui,
   overflow: auto;
 }
 .alerts-header{ margin-bottom:8px; }
+
+.details-panel {
+  position: absolute;
+  right: 12px;
+  top: 86px;
+  width: 340px;
+  max-width: calc(100% - 24px);
+  background: var(--card-bg);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  padding: 12px;
+  z-index: 1100;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+}
+.details-header {
+  margin-bottom: 10px;
+  font-weight: bold;
+}
+.details-content .empty-msg {
+  font-size: 13px;
+  color: #666;
+}
+
 
 @media (max-width:1000px){
   .alerts-panel{ display:none; }
