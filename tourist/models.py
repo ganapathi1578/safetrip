@@ -8,6 +8,7 @@ from datetime import timedelta
 # ─── Tourist ────────────────────────────────────────────────
 
 class Tourist(models.Model):
+    #profile_photo
     userid = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=100, blank=True)
     email = models.EmailField(unique=True)
@@ -21,16 +22,7 @@ class Tourist(models.Model):
     aadhaar_verified = models.BooleanField(default=False)
     passport_no = models.CharField(max_length=20, blank=True, null=True)
     emergency_contact = models.CharField(max_length=15, blank=True, null=True)
-    password = models.CharField(max_length=128, blank=True)  # hashed
     created_at = models.DateTimeField(auto_now_add=True)
-
-    def save(self, *args, **kwargs):
-        if self.password and not self.password.startswith("pbkdf2_"):
-            self.password = make_password(self.password)
-        super().save(*args, **kwargs)
-
-    def check_password(self, raw_password):
-        return check_password(raw_password, self.password)
 
     def __str__(self):
         return f"{self.name} ({self.userid})"
