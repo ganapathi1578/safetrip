@@ -5,7 +5,7 @@ __pycache__/
 *.pyd
 
 # SQLite database
-db.sqlite3
+
 
 # Django stuff
 *.log
