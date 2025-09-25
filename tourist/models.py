@@ -140,3 +140,22 @@ class Trip(models.Model):
 
     def __str__(self):
         return f"Trip {self.trip_title} ({self.itinerary.title})"
+
+
+
+class Cluster(models.Model):
+    cluster_id = models.IntegerField()
+    center_latitude = models.DecimalField(max_digits=9, decimal_places=6)
+    center_longitude = models.DecimalField(max_digits=9, decimal_places=6)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    def __str__(self):
+        return f"Cluster {self.cluster_id} @ ({self.center_latitude}, {self.center_longitude})"
+
+
+class ClusterMember(models.Model):
+    cluster = models.ForeignKey(Cluster, on_delete=models.CASCADE, related_name="members")
+    location = models.ForeignKey(TouristLocation, on_delete=models.CASCADE, related_name="cluster_members")
+
+    def __str__(self):
+        return f"{self.location.tourist.userid} in Cluster {self.cluster.cluster_id}"

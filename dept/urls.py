@@ -16,4 +16,5 @@ urlpatterns = [
     path("api/tourists/latest/", views.api_tourists_latest, name="api_tourists_latest"),
     path("tourist/<str:userid>/details/", views.get_tourist_details, name="tourist_details"),
     path('tourist/map/<str:tourist_id>/', views.tourist_map_view, name='tourist_map'),
+    path("api/clusters/", views.api_clusters, name="api_clusters"),
 ]

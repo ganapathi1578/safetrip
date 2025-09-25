@@ -8,6 +8,322 @@
   <title>SafeTour — Map</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="{% static 'css/zone_management.css' %}" />
+  <style>
+    /* Zone management / top-bar styles extracted from template */
+    :root{
+      --card-bg: rgba(255,255,255,0.98);
+      --shadow: 0 8px 24px rgba(0,0,0,0.12);
+      --primary: #1f6feb;
+      --muted: #6b7280;
+    }
+
+    html, body, #map {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+    }
+
+    #map {
+      width: 100%;
+      height: 100vh;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+    }
+
+    /* Top bar similar to Google Maps - FIXED VERSION */
+    .top-bar {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 90%;
+      max-width: 1200px;
+      background: rgba(255,255,255,0.95);
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      z-index: 1100;
+      box-sizing: border-box;
+    }
+    
+    .top-left { 
+      flex: 1;
+      min-width: 200px;
+    }
+    
+    .search-box { 
+      display: flex; 
+      align-items: center; 
+      gap: 8px;
+      width: 100%;
+    }
+    
+    .search-box input[type=search] {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      outline: none;
+      font-size: 14px;
+      transition: border-color 0.2s ease;
+      box-sizing: border-box;
+      flex: 1;
+    }
+    
+    .search-box input[type=search]:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.1);
+    }
+    
+    .search-btn {
+      background: var(--primary);
+      border: 0;
+      cursor: pointer;
+      font-size: 16px;
+      color: white;
+      padding: 10px 14px;
+      border-radius: 8px;
+      transition: background-color 0.2s ease;
+      min-width: 44px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .search-btn:hover {
+      background-color: #0d5bd9;
+    }
+    
+    .top-center { 
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+    
+    .pill-group { 
+      display: flex; 
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    
+    .pill {
+      background: #fff;
+      border: 1px solid #e6e7ea;
+      padding: 8px 16px;
+      border-radius: 20px;
+      cursor: pointer;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.03);
+      font-size: 14px;
+      white-space: nowrap;
+    }
+    
+    .pill:hover { 
+      box-shadow: 0 6px 18px rgba(0,0,0,0.06); 
+    }
+    
+    .pill:active { 
+      background: var(--primary); 
+      color: #fff; 
+      border-color: transparent; 
+    }
+
+    /* Filters dropdown — anchored below the top bar */
+    .filters-dropdown {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      width: 520px;
+      max-width: calc(100% - 40px);
+      background: var(--card-bg);
+      border-radius: 10px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+      z-index: 1200;
+      display: none;
+      box-sizing: border-box;
+    }
+    
+    .filters-dropdown[aria-hidden="false"] { 
+      display: block; 
+    }
+    
+    .filters-dropdown h4 { 
+      margin: 0 0 12px 0; 
+      font-size: 16px; 
+    }
+    
+    .zone-type-item { 
+      display: flex; 
+      align-items: center; 
+      gap: 8px; 
+      margin: 8px 0; 
+    }
+    
+    .filter-actions { 
+      margin-top: 16px; 
+      display: flex; 
+      gap: 8px; 
+      justify-content: flex-end; 
+    }
+    
+    .btn { 
+      padding: 10px 16px; 
+      border-radius: 6px; 
+      border: 0; 
+      cursor: pointer; 
+      background: var(--primary); 
+      color: #fff; 
+      font-size: 14px;
+    }
+    
+    .btn-outline { 
+      background: transparent; 
+      border: 1px solid #ccc; 
+      color: #333; 
+    }
+    
+    .alerts-list { 
+      margin-top: 12px; 
+      max-height: 220px; 
+      overflow: auto; 
+    }
+    
+    .alert-item { 
+      padding: 12px; 
+      border-radius: 6px; 
+      margin-bottom: 8px; 
+      background: #fff; 
+      box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    
+    .alert-item:hover {
+      background-color: #f8f9fa;
+    }
+    
+    .alert-item .meta { 
+      font-size: 12px; 
+      color: var(--muted); 
+    }
+
+    /* Right side details panel */
+    .details-panel {
+      position: absolute;
+      right: 12px;
+      top: 86px;
+      width: 340px;
+      max-width: calc(100% - 24px);
+      background: var(--card-bg);
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+      padding: 16px;
+      z-index: 1100;
+      max-height: calc(100vh - 120px);
+      overflow-y: auto;
+      box-sizing: border-box;
+    }
+    
+    .details-header { 
+      margin-bottom: 16px; 
+      font-weight: bold;
+      font-size: 18px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #e6e7ea;
+    }
+    
+    .details-content .empty-msg { 
+      font-size: 14px; 
+      color: #666; 
+      text-align: center;
+      padding: 20px 0;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 1000px) {
+      .top-bar { 
+        width: calc(100% - 24px); 
+        left: 12px; 
+        transform: none; 
+        border-radius: 8px;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+      
+      .top-left {
+        min-width: 100%;
+        order: 1;
+      }
+      
+      .top-center {
+        order: 2;
+        min-width: 100%;
+      }
+      
+      .pill-group {
+        justify-content: center;
+      }
+      
+      .filters-dropdown { 
+        left: 12px; 
+        transform: none; 
+        width: calc(100% - 24px); 
+      }
+      
+      .details-panel {
+        width: calc(100% - 24px);
+        right: 12px;
+        left: 12px;
+        top: auto;
+        bottom: 12px;
+        max-height: 40vh;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .top-bar {
+        padding: 8px 12px;
+      }
+      
+      .pill {
+        padding: 6px 12px;
+        font-size: 13px;
+      }
+      
+      .search-box input[type=search] {
+        padding: 8px 12px;
+      }
+      
+      .search-btn {
+        padding: 8px 12px;
+        min-width: 40px;
+        height: 36px;
+      }
+    }
+
+    /* Remove conflicting styles that were causing layout issues */
+    .cluster-legend { 
+      font-size: 12px; 
+      margin-top: 12px; 
+    }
+    
+    .cluster-legend .dot { 
+      display: inline-block; 
+      width: 12px; 
+      height: 12px; 
+      border-radius: 6px; 
+      margin-right: 6px; 
+      vertical-align: middle; 
+    }
+  </style>
 </head>
 <body>
   <div id="map"></div>
@@ -16,14 +332,14 @@
   <div class="top-bar" id="topBar">
     <div class="top-left">
       <div class="search-box">
-        <input type="search" placeholder="Search map" aria-label="Search map">
+        <input type="search" placeholder="Search location..." aria-label="Search map">
         <button class="search-btn">🔍</button>
       </div>
     </div>
     <div class="top-center">
       <div class="pill-group">
         <button class="pill" id="openZoneTypes">Filters</button>
-        <button class="pill" id="toggleTouristsBtn">Tourists</button>
+        <button class="pill" id="toggleTouristsBtn">Clusters</button>
         <button class="pill" id="applyFiltersBtn">Apply</button>
         <button class="pill" id="resetFiltersBtn">Reset</button>
       </div>
@@ -37,21 +353,33 @@
         <div id="zoneTypeList">Loading...</div>
       </div>
 
-      <div style="margin-top:8px;">
+      <div style="margin-top:16px;">
         <strong>Time</strong>
-        <div>
-          <label><input type="radio" name="timeMode" value="current" checked> Current</label>
-          <label><input type="radio" name="timeMode" value="all"> All</label>
+        <div style="margin-top:8px;">
+          <label style="margin-right:12px;"><input type="radio" name="timeMode" value="current" checked> Current</label>
+          <label style="margin-right:12px;"><input type="radio" name="timeMode" value="all"> All</label>
           <label><input type="radio" name="timeMode" value="custom"> Custom</label>
         </div>
-        <div id="customTimeInputs" style="display:none; margin-top:6px;">
-          <input type="time" id="customStart"> to 
-          <input type="time" id="customEnd">
+        <div id="customTimeInputs" style="display:none; margin-top:10px;">
+          <input type="time" id="customStart" style="padding:6px; border:1px solid #ddd; border-radius:4px;"> 
+          <span style="margin:0 8px;">to</span>
+          <input type="time" id="customEnd" style="padding:6px; border:1px solid #ddd; border-radius:4px;">
         </div>
       </div>
 
-      <div style="margin-top:8px;">
-        <label><input type="checkbox" id="showTourists"> Show Tourists (latest)</label>
+      <div style="margin-top:16px;">
+        <label><input type="checkbox" id="showClusters" checked> Show Clusters (default ON)</label>
+      </div>
+
+      <div style="margin-top:16px;">
+        <strong>Cluster Filters</strong>
+        <div id="clusterFilterList" style="margin-top:8px;">Loading clusters...</div>
+        <div class="cluster-legend" id="clusterLegend"></div>
+      </div>
+
+      <div class="filter-actions">
+        <button class="btn" id="applyFiltersBtnDropdown">Apply Filters</button>
+        <button class="btn btn-outline" id="closeFiltersBtn">Close</button>
       </div>
     </div>
   </div>
@@ -66,10 +394,23 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-/* ---------- main JS (keeps all original features) ---------- */
+// ... (your existing JavaScript code remains exactly the same) ...
+/* ---------- main JS (keeps all original features + clustering) ---------- */
 let map;
 let zoneLayers = [];
 let touristMarkers = [];
+let clusterColors = {}; // cluster_id -> color
+let displayedClusterIds = new Set(); // which clusters to show (from UI)
+let showClusters = true;
+
+/* small helper to create visually distinct colors */
+function getColorForCluster(clusterId){
+  if(clusterColors[clusterId]) return clusterColors[clusterId];
+  const h = (clusterId * 137) % 360;
+  const color = `hsl(${h}, 70%, 45%)`;
+  clusterColors[clusterId] = color;
+  return color;
+}
 
 /* Toggle helper */
 function toggleFilters(show) {
@@ -120,9 +461,9 @@ function readFilters(){
   const timeMode = timeModeEl ? timeModeEl.value : 'current';
   const customStart = (document.getElementById('customStart') || {}).value || '';
   const customEnd = (document.getElementById('customEnd') || {}).value || '';
-  const showTouristsEl = document.getElementById('showTourists');
-  const showTourists = showTouristsEl ? showTouristsEl.checked : false;
-  return {zone_type_ids: checked, timeMode, customStart, customEnd, showTourists};
+  const showClustersEl = document.getElementById('showClusters');
+  const showClustersChecked = showClustersEl ? showClustersEl.checked : true;
+  return {zone_type_ids: checked, timeMode, customStart, customEnd, showClusters: showClustersChecked};
 }
 
 /* Clear map layers */
@@ -134,7 +475,133 @@ function clearMap(){
   if(window._searchMarker){ try { map.removeLayer(window._searchMarker); } catch(e){} window._searchMarker = null; }
 }
 
-/* Apply filters: fetch alerts and tourists, draw on map */
+/* Populate cluster filter UI (list of available cluster ids) */
+function populateClusterFilterUI(clusters){
+  const container = document.getElementById('clusterFilterList');
+  const legend = document.getElementById('clusterLegend');
+  container.innerHTML = '';
+  legend.innerHTML = '';
+  if(!Array.isArray(clusters) || clusters.length===0){
+    container.innerHTML = '<div class="empty-msg">No clusters found.</div>';
+    return;
+  }
+
+  clusters.forEach(c => {
+    const id = `cluster_cb_${c.cluster_id}`;
+    const div = document.createElement('div');
+    div.innerHTML = `<label><input type="checkbox" id="${id}" value="${c.cluster_id}" checked> Cluster ${c.cluster_id} (${c.members.length})</label>`;
+    container.appendChild(div);
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    dot.style.background = getColorForCluster(c.cluster_id);
+    dot.style.display = 'inline-block';
+    dot.style.width = '12px';
+    dot.style.height = '12px';
+    dot.style.borderRadius = '8px';
+    dot.style.marginRight = '6px';
+    const label = document.createElement('span');
+    label.textContent = `Cluster ${c.cluster_id}`;
+    const wrap = document.createElement('div');
+    wrap.appendChild(dot);
+    wrap.appendChild(label);
+    legend.appendChild(wrap);
+  });
+
+  displayedClusterIds = new Set(clusters.map(c=>String(c.cluster_id)));
+
+  container.querySelectorAll('input[type=checkbox]').forEach(cb=>{
+    cb.addEventListener('change', (e)=>{
+      const val = String(e.target.value);
+      if(e.target.checked) displayedClusterIds.add(val);
+      else displayedClusterIds.delete(val);
+      fetchAndRenderClusters();
+    });
+  });
+}
+
+/* Fetch clusters and unclustered tourists from backend then render them */
+async function fetchAndRenderClusters(){
+  const f = readFilters();
+  if(!f.showClusters){
+    clearClusterMarkersOnly();
+    return;
+  }
+
+  try {
+    const params = new URLSearchParams();
+    params.set('mode', f.timeMode || 'current');
+    if(f.timeMode === 'custom'){
+      if(f.customStart) params.set('start_time', f.customStart);
+      if(f.customEnd) params.set('end_time', f.customEnd);
+    }
+    const res = await fetch('/api/clusters/?' + params.toString());
+    if(!res.ok) throw new Error('Failed to load clusters');
+    const json = await res.json();
+
+    populateClusterFilterUI(json.clusters || []);
+
+    clearClusterMarkersOnly();
+
+    (json.clusters || []).forEach(cluster => {
+      const cId = String(cluster.cluster_id);
+      if(!displayedClusterIds.has(cId)) return;
+      const color = getColorForCluster(cluster.cluster_id);
+      (cluster.members || []).forEach(m => {
+        if(m.latitude == null || m.longitude == null) return;
+        const marker = L.circleMarker([m.latitude, m.longitude], {
+          radius: 6,
+          color: color,
+          fillColor: color,
+          fillOpacity: 0.85,
+          weight: 1
+        }).addTo(map);
+        marker.bindPopup(`<strong>${escapeHtml(m.name || m.tourist_id)}</strong><br>Cluster ${cluster.cluster_id}<br>${new Date(m.timestamp).toLocaleString()}`);
+        marker.on('click', () => {
+          marker.openPopup();
+          if(m.tourist_id) showTouristDetails(m.tourist_id);
+        });
+        touristMarkers.push(marker);
+      });
+
+      if(cluster.center_latitude != null && cluster.center_longitude != null){
+        const center = L.circleMarker([cluster.center_latitude, cluster.center_longitude], {
+          radius: 9,
+          color: '#000',
+          fillColor: getColorForCluster(cluster.cluster_id),
+          fillOpacity: 1,
+          weight: 1
+        }).addTo(map);
+        center.bindPopup(`<strong>Cluster ${cluster.cluster_id}</strong><br>Members: ${cluster.members.length}`);
+        touristMarkers.push(center);
+      }
+    });
+
+    (json.unclustered_tourists || []).forEach(t => {
+      if(t.latitude == null || t.longitude == null) return;
+      const marker = L.circleMarker([t.latitude, t.longitude], {
+        radius: 5,
+        color: '#000',
+        fillColor: '#000',
+        fillOpacity: 0.8,
+        weight: 0.8
+      }).addTo(map);
+      marker.bindPopup(`<strong>${escapeHtml(t.name || t.tourist_id)}</strong><br>Not in cluster<br>${new Date(t.timestamp).toLocaleString()}`);
+      marker.on('click', () => { marker.openPopup(); if(t.tourist_id) showTouristDetails(t.tourist_id); });
+      touristMarkers.push(marker);
+    });
+
+  } catch (err) {
+    console.error('fetchAndRenderClusters error', err);
+  }
+}
+
+/* remove only the tourist markers (cluster markers etc) */
+function clearClusterMarkersOnly(){
+  touristMarkers.forEach(m => { try{ map.removeLayer(m); }catch(e){} });
+  touristMarkers = [];
+}
+
+/* Apply filters: fetch alerts and (then) clusters, draw on map */
 async function applyFilters(){
   const f = readFilters();
   clearMap();
@@ -147,14 +614,12 @@ async function applyFilters(){
     if(f.customStart) params.set('start_time', f.customStart.substring(0,5));
     if(f.customEnd) params.set('end_time', f.customEnd.substring(0,5));
   }
-  if(f.showTourists) params.set('include_latest_tourists','1');
 
   try {
     const res = await fetch('/api/alerts/?' + params.toString());
     if(!res.ok) throw new Error('alerts API failed: ' + res.status);
     const json = await res.json();
 
-    // draw alerts (as circles centered on zone lat/lng)
     if(Array.isArray(json.alerts)){
       json.alerts.forEach(a => {
         const lat = a.zone && a.zone.latitude;
@@ -173,29 +638,14 @@ async function applyFilters(){
       });
     }
 
-    // optionally draw latest tourists returned in the same response
-    if(Array.isArray(json.latest_tourists)){
-      json.latest_tourists.forEach(t => {
-        const userId = t.userid || t.user_id || t.id || t.tourist_id;
-        if(t.latitude == null || t.longitude == null) return;
-        const m = L.marker([t.latitude, t.longitude]);
-        const popupHtml = `<strong>${escapeHtml(t.name || 'Unknown')}</strong><br>${new Date(t.timestamp).toLocaleString()}`;
-        m.bindPopup(popupHtml);
-        m.on('click', () => {
-          m.openPopup();
-          if(userId) showTouristDetails(userId);
-        });
-        m.addTo(map);
-        touristMarkers.push(m);
-      });
-    }
-
     renderAlertsList(Array.isArray(json.alerts) ? json.alerts : []);
   } catch (err) {
     console.error('applyFilters error', err);
     const container = document.getElementById('detailsContent');
-    if(container) container.innerHTML = `<div class="empty-msg" style="color:#a00">Failed to load alerts or tourists.</div>`;
+    if(container) container.innerHTML = `<div class="empty-msg" style="color:#a00">Failed to load alerts.</div>`;
   }
+
+  await fetchAndRenderClusters();
 }
 
 /* Fetch and render tourist details into right panel */
@@ -300,7 +750,7 @@ function renderAlertsList(alerts){
   });
 }
 
-/* UI bindings (preserves old features, with improved dropdown behavior) */
+/* UI bindings (preserves old features, with improved dropdown behavior and clustering) */
 function bindUI(){
   const applyBtn = document.getElementById('applyFiltersBtn');
   if(applyBtn) applyBtn.addEventListener('click', applyFilters);
@@ -310,29 +760,25 @@ function bindUI(){
     document.querySelectorAll('#zoneTypeList input[type=checkbox]').forEach(cb=>cb.checked=false);
     const current = document.querySelector('input[name=timeMode][value=current]'); if(current) current.checked = true;
     const customInputs = document.getElementById('customTimeInputs'); if(customInputs) customInputs.style.display='none';
-    const showTouristsEl = document.getElementById('showTourists'); if(showTouristsEl) showTouristsEl.checked = false;
+    const showClustersEl = document.getElementById('showClusters'); if(showClustersEl) showClustersEl.checked = true;
     await applyFilters();
   });
 
-  // dropdown toggling: improved to avoid immediate close
   const openZone = document.getElementById('openZoneTypes');
   const dd = document.getElementById('filtersDropdown');
   const topBar = document.getElementById('topBar');
 
   if(openZone && dd){
-    // stop click bubbling from the toggle so document-level handler doesn't immediately close it
     openZone.addEventListener('click', (e) => {
       e.stopPropagation();
       const isHidden = dd.getAttribute('aria-hidden') === 'true' || dd.style.display === 'none';
       toggleFilters(isHidden);
     });
 
-    // prevent clicks inside dropdown from bubbling up (so interacting with checkboxes/buttons doesn't close it)
     dd.addEventListener('click', (e) => e.stopPropagation());
     dd.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
   }
 
-  // Close dropdown when clicking/touching outside (safe single handler)
   const closeIfOutside = (e) => {
     const ddVisible = dd && dd.getAttribute('aria-hidden') === 'false';
     if(!ddVisible) return;
@@ -343,37 +789,32 @@ function bindUI(){
   document.addEventListener('click', closeIfOutside);
   document.addEventListener('touchstart', closeIfOutside, { passive: true });
 
-  // Close on Escape
   document.addEventListener('keydown', (e) => { if(e.key === 'Escape') toggleFilters(false); });
 
-  // Tourists toggle button
   const toggleTouristsBtn = document.getElementById('toggleTouristsBtn');
   if(toggleTouristsBtn){
     toggleTouristsBtn.addEventListener('click', async ()=> {
-      const s = document.getElementById('showTourists');
-      if(s){
-        s.checked = !s.checked;
-        toggleTouristsBtn.classList.toggle('active', s.checked);
+      const chk = document.getElementById('showClusters');
+      if(chk){
+        chk.checked = !chk.checked;
+        toggleTouristsBtn.classList.toggle('active', chk.checked);
         await applyFilters();
       }
     });
   }
 
-  const showTouristsEl = document.getElementById('showTourists');
-  if(showTouristsEl){
-    showTouristsEl.addEventListener('change', async ()=> {
-      const toggleBtn = document.getElementById('toggleTouristsBtn');
-      if(toggleBtn) toggleBtn.classList.toggle('active', showTouristsEl.checked);
+  const showClustersEl = document.getElementById('showClusters');
+  if(showClustersEl){
+    showClustersEl.addEventListener('change', async ()=> {
+      document.getElementById('toggleTouristsBtn').classList.toggle('active', showClustersEl.checked);
       await applyFilters();
     });
   }
 
-  // custom time inputs toggling
   document.querySelectorAll('input[name=timeMode]').forEach(r => r.addEventListener('change', (e)=>{
     const ct = document.getElementById('customTimeInputs'); if(ct) ct.style.display = (e.target.value === 'custom') ? 'block' : 'none';
   }));
 
-  // search handler (Nominatim)
   const searchInput = document.querySelector('.search-box input[type=search]');
   const searchBtn = document.querySelector('.search-box .search-btn');
   async function doSearch(){
@@ -407,11 +848,17 @@ function escapeHtml(str){
 }
 
 /* startup */
+let clusterRefreshInterval = null;
 window.addEventListener('DOMContentLoaded', async ()=>{
   initMap();
   await fetchFilterOptions();
   bindUI();
-  applyFilters();
+  await applyFilters();
+
+  if(clusterRefreshInterval) clearInterval(clusterRefreshInterval);
+  clusterRefreshInterval = setInterval(() => {
+    fetchAndRenderClusters();
+  }, 20000);
 });
   </script>
 </body>

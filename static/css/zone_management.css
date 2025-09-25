@@ -39,12 +39,30 @@ html, body, #map {
 .search-box { display: flex; align-items: center; gap: 8px; }
 .search-box input[type=search] {
   width: 100%;
-  padding: 8px 10px;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
   border-radius: 6px;
-  border: 1px solid #e5e7eb;
   outline: none;
+  font-size: 14px;
+  transition: border-color 0.2s ease;
 }
-.search-btn { background: transparent; border: 0; cursor: pointer; font-size: 18px; }
+.search-box input[type=search]:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.1);
+}
+.search-btn {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 18px;
+  color: var(--primary);
+  padding: 8px;
+  border-radius: 6px;
+  transition: background-color 0.2s ease;
+}
+.search-btn:hover {
+  background-color: #f3f4f6;
+}
 .top-center { flex: 0 0 auto; }
 .pill-group { display: flex; gap: 8px; }
 .pill {

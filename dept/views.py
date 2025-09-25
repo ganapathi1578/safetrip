@@ -464,3 +464,94 @@ def tourist_map_view(request,tourist_id):
         "tourist_id": tourist_id,
         "locations": locations
     })
+
+
+
+from django.views.decorators.http import require_GET
+from django.http import JsonResponse
+from django.db.models import OuterRef, Subquery
+from tourist.models import Tourist, TouristLocation
+from tourist.models import Cluster, ClusterMember
+import datetime
+
+@require_GET
+def api_clusters(request):
+    """
+    Return clusters with their members and also latest tourists who are NOT in any cluster.
+    Query params:
+      - mode: 'current'|'all'|'custom' (optional) — currently forwarded but not used to filter clusters.
+      - start_time, end_time for custom (not used here but accepted)
+    Response:
+    {
+      "clusters": [
+        {
+          "cluster_id": int,
+          "center_latitude": float,
+          "center_longitude": float,
+          "created_at": "iso",
+          "members": [
+            {"tourist_id": "...", "name": "...", "latitude": float, "longitude": float, "timestamp": "iso"}
+          ]
+        }, ...
+      ],
+      "unclustered_tourists": [
+         {"tourist_id": "...", "name":"...", "latitude": float, "longitude": float, "timestamp":"iso"}
+      ]
+    }
+    """
+    # Fetch clusters and members
+    clusters = []
+    # Prefetch related objects to reduce DB hits
+    qs = Cluster.objects.prefetch_related("members__location__tourist").order_by("-created_at")
+    cluster_member_tourist_ids = set()
+
+    for c in qs:
+        members = []
+        for cm in c.members.all():
+            loc = cm.location
+            if not loc:
+                continue
+            t = getattr(loc, 'tourist', None)
+            tourist_id = t.userid if t else None
+            if tourist_id:
+                cluster_member_tourist_ids.add(tourist_id)
+            members.append({
+                "tourist_id": tourist_id,
+                "name": t.name if t else None,
+                "latitude": float(loc.latitude),
+                "longitude": float(loc.longitude),
+                "timestamp": loc.timestamp.isoformat() if loc.timestamp else None,
+            })
+        clusters.append({
+            "cluster_id": c.cluster_id,
+            "center_latitude": float(c.center_latitude),
+            "center_longitude": float(c.center_longitude),
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+            "members": members
+        })
+
+    # Build latest location per tourist (annotate)
+    latest_ts = TouristLocation.objects.filter(tourist=OuterRef("pk")).order_by("-timestamp")
+    annot = Tourist.objects.annotate(
+        latest_lat=Subquery(latest_ts.values("latitude")[:1]),
+        latest_lng=Subquery(latest_ts.values("longitude")[:1]),
+        latest_time=Subquery(latest_ts.values("timestamp")[:1])
+    )
+
+    unclustered = []
+    for t in annot:
+        # skip if no latest location
+        if not t.latest_lat or not t.latest_lng:
+            continue
+        # if tourist is part of cluster members, skip
+        if t.userid in cluster_member_tourist_ids:
+            continue
+        unclustered.append({
+            "tourist_id": t.userid,
+            "name": t.name,
+            "latitude": float(t.latest_lat),
+            "longitude": float(t.latest_lng),
+            "timestamp": t.latest_time.isoformat() if t.latest_time else None,
+        })
+
+    return JsonResponse({"clusters": clusters, "unclustered_tourists": unclustered})
