@@ -10,51 +10,102 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
 
+  <!-- Leaflet + Draw CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+
   <style>
-    :root { --gap: 14px; --panel-bg: #fff; --muted: #666; }
-    html, body { height: 100%; margin:0; padding:0; }
-    body { font-family: Inter, system-ui, Arial; background:#f6f7fb; color:#222; box-sizing: border-box; padding:12px; }
+    :root {
+      --gap: 14px;
+      --panel-bg: #b4d4f7;
+      --muted: #6b7280;
+      --accent: #2563eb; /* blue-600 */
+      --accent-600: #1d4ed8;
+      --surface: #f8fafc;
+      --card-border: #e6eefc;
+      --radius: 12px;
+      --glass: rgba(255,255,255,0.7);
+    }
 
-    /* Two-column full-height layout */
-    .layout { display:flex; gap:var(--gap); height: calc(100vh - 24px); min-height:0; }
+    html, body { height:100%; margin:0; padding:0; }
+    body { font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; background:linear-gradient(180deg,#f6f8fb 0%, #fbfdff 100%); color:#0f172a; box-sizing:border-box; padding:14px; }
 
-    /* Map column (left) and form column (right) */
-    .map-col { flex: 3 1 0; min-width:0; }
-    .form-col { flex: 1 0 360px; max-width:420px; background:var(--panel-bg); border:1px solid #e6e9ef; border-radius:8px; box-shadow:0 4px 10px rgba(20,20,40,0.03); overflow:hidden; display:flex; flex-direction:column; }
+    /* Layout */
+    .layout { display:flex; gap:var(--gap); height: calc(100vh - 28px); min-height:0; }
+    .map-col { flex:3 1 0; min-width:0; }
+    .form-col { flex:1 0 380px; max-width:460px; background:transparent; display:flex; flex-direction:column; }
 
-    /* Map should fill left column */
-    #map { width:100%; height:100%; border-radius:8px; border:1px solid #ddd; display:block; }
+    /* card wrapper to allow shadow separation from map */
+    .panel { background:linear-gradient(270deg,var(--panel-bg),var(--glass)); border-radius:var(--radius); box-shadow:0 12px 36px rgba(15,23,42,0.08); border:1px solid var(--card-border); overflow:hidden; display:flex; flex-direction:column; height:100%; }
 
-    /* Form content scrolls independently */
-    .form-body { padding:16px; overflow:auto; display:flex; flex-direction:column; gap:12px; }
+    /* Map */
+    #map { width:100%; height:100%; border-radius:12px; border:1px solid rgba(15,23,42,0.04); box-shadow:inset 0 -1px 0 rgba(15,23,42,0.02); }
+
+    /* Form body */
+    .form-body { padding:16px; overflow:auto; display:flex; flex-direction:column; gap:14px; }
 
     /* Messages */
-    .messages { margin-bottom: 8px; }
-    .message { padding:8px 10px; border-radius:6px; margin-bottom:6px; }
-    .message.error { background:#fde2e2; border:1px solid #f5a3a3; color:#7a1b1b; }
-    .message.success { background:#e6f7ea; border:1px solid #8fd29b; color:#1b5e1b; }
+    .messages { margin-bottom: 6px; }
+    .message { padding:10px 12px; border-radius:8px; margin-bottom:8px; font-size:0.95rem; }
+    .message.error { background:#fff1f2; border:1px solid #fecaca; color:#7f1d1d; }
+    .message.success { background:#ecfdf5; border:1px solid #bbf7d0; color:#065f46; }
 
-    h1 { font-size:20px; margin:0 0 6px 0; }
+    /* Headings */
     h2 { font-size:16px; margin:0; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    h3 { margin:0; }
     .small { font-size:0.9rem; color:var(--muted); }
-    label { display:block; font-weight:600; margin-bottom:6px; font-size:0.95rem; }
-    input[type="text"], input[type="number"], input[type="time"], textarea, select { width:100%; padding:8px 10px; border-radius:6px; border:1px solid #d6d9e6; font-size:0.95rem; box-sizing:border-box; }
-    textarea { min-height:80px; resize:vertical; }
-    .btn { display:inline-block; padding:8px 12px; border-radius:6px; border:1px solid #2b6cb0; background:#2b6cb0; color:#fff; cursor:pointer; text-decoration:none; }
-    .btn-outline { background:transparent; color:#2b6cb0; border-color:#2b6cb0; }
-    .card { background:#fff; padding:10px; border-radius:6px; border:1px solid #eee; margin-bottom:10px; }
-    .type-block, .alert-row { border:1px solid #f0f0f0; padding:8px; border-radius:6px; margin-bottom:8px; background:#fbfcff; }
-    .coords { font-family:monospace; color:#1f2937; background:#f5f7fa; padding:6px 8px; border-radius:6px; display:inline-block; }
-    .muted { color:#777; font-size:0.9rem; }
 
-    /* Zone card actions (buttons) on the right of heading */
+    /* Forms */
+    label { display:block; font-weight:600; margin-bottom:6px; font-size:0.92rem; color:#0f172a; }
+    input[type="text"], input[type="number"], input[type="time"], textarea, select {
+      width:100%; padding:10px 12px; border-radius:10px; border:1px solid #e6eef8; font-size:0.95rem; box-sizing:border-box; background:linear-gradient(180deg,#fff 0%, #fbfdff 100%);
+      transition:box-shadow .18s cubic-bezier(.2,.9,.3,1), border-color .12s ease, transform .08s ease;
+    }
+    input[type="text"]::placeholder, textarea::placeholder { color:#9aa6bf; }
+    input:focus, textarea:focus, select:focus { outline:none; box-shadow:0 10px 30px rgba(37,99,235,0.08); border-color:var(--accent-600); transform:translateY(-2px); }
+    textarea { min-height:90px; resize:vertical; }
+
+    /* Buttons */
+    .btn { display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:10px; border:1px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; text-decoration:none; font-weight:600; transition:transform .12s ease, box-shadow .12s ease; }
+    .btn:hover { transform:translateY(-2px); box-shadow:0 8px 20px rgba(37,99,235,0.12); }
+    .btn:active { transform:translateY(0); }
+    .btn-outline { background:transparent; color:var(--accent); border-color:var(--accent); }
+    .btn-ghost { background:transparent; border:1px dashed #e2e8f0; color:#0f172a; }
+
+    .card { background:#fff; padding:14px; border-radius:12px; border:1px solid #eef2ff; margin-bottom:12px; transition:transform .12s ease, box-shadow .12s ease; }
+    .card:hover { transform:translateY(-4px); box-shadow:0 12px 30px rgba(12,18,44,0.06); }
+    .type-block, .alert-row { border:1px solid #f1f5f9; padding:12px; border-radius:10px; margin-bottom:10px; background:linear-gradient(180deg,#fff 0%, #fbfdff 100%); position:relative; }
+
+    .coords { font-family:monospace; color:#0f172a; background:#f8fafc; padding:6px 10px; border-radius:8px; display:inline-block; box-shadow:0 1px 0 rgba(15,23,42,0.02); }
+    .muted { color:var(--muted); font-size:0.9rem; }
+
     .zone-actions { display:flex; gap:8px; align-items:center; }
 
-    @media (max-width:900px) {
+    /* remove button for type blocks */
+    .type-remove { position:absolute; right:12px; top:12px; border-radius:8px; padding:6px 8px; background:#fff; border:1px solid #f1f5f9; cursor:pointer; color:#b91c1c; font-weight:700; }
+    .type-remove:hover { background:#fff6f6; transform:translateY(-2px); }
+
+    /* collapsible content */
+    .type-block .body { margin-top:10px; }
+    .type-block.collapsed { max-height:56px; overflow:hidden; }
+
+    /* Sticky header within right panel */
+    .panel-header { position:sticky; top:12px; background:transparent; z-index:4; padding:12px 16px; }
+
+    /* compact grid for form rows */
+    .form-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; align-items:center; }
+    .form-row.single { grid-template-columns:1fr; }
+
+    /* zone preview animation */
+    #zoneInfo { transition:transform .18s ease, opacity .18s ease; transform-origin:top right; }
+
+    /* responsive tweaks */
+    @media (max-width:980px) {
       .layout { flex-direction:column; height:auto; }
       .map-col, .form-col { width:100%; flex:none; }
       #map { height:420px; }
       .form-col { max-width:none; }
+      .panel-header { position:relative; top:auto; }
     }
   </style>
 </head>
@@ -68,99 +119,100 @@
 
     <!-- RIGHT: FORM (scrollable) -->
     <div class="form-col">
-      <div class="form-body">
-        {# show Django messages so user sees formset/field errors #}
-        <div class="messages">
-          {% if messages %}
-            {% for m in messages %}
-              <div class="message {% if m.tags %}{{ m.tags }}{% endif %}">{{ m }}</div>
-            {% endfor %}
-          {% endif %}
-        </div>
-
-        <form method="post" id="zone-form" novalidate>
-          {% csrf_token %}
-
-          <!-- Management forms (render exactly once) -->
-          <div id="management-forms" style="display:none;">
-            {{ types_formset.management_form }}
-            {{ alerts_formset.management_form }}
-          </div>
-
-          <!-- Zone card with action buttons (Clear + Use my location) -->
-          <div class="card">
-            <h2>
-              <span>Zone</span>
-              <span class="zone-actions">
-                <button type="button" id="clearMapBtn" class="btn btn-outline" title="Clear map">Clear</button>
-                <button type="button" id="locateBtn" class="btn btn-outline" title="Use my location">Use my location</button>
-              </span>
-            </h2>
-
-            <div style="margin-top:10px;">
-               {% csrf_token %}
-              {{ zone_form.as_p }}
-              <!-- optional: hidden field to save polygon points if user draws polygon -->
-              <input type="hidden" name="zone-polygon_points" id="id_zone-polygon_points" />
+      <div class='panel'>
+        <div class="panel-header">
+          <div class="form-body">
+            {# show Django messages so user sees formset/field errors #}
+            <div class="messages">
+              {% if messages %}
+                {% for m in messages %}
+                  <div class="message {% if m.tags %}{{ m.tags }}{% endif %}">{{ m }}</div>
+                {% endfor %}
+              {% endif %}
             </div>
 
-            <div style="margin-top:8px; display:flex; gap:8px; align-items:center;">
-              <div><strong>Coords:</strong> <span id="coordsPreview" class="coords">—</span></div>
-              <div><strong>Radius:</strong> <span id="radiusPreview" class="coords">—</span></div>
-            </div>
-          </div>
+            <form method="post" id="zone-form" novalidate>
+              {% csrf_token %}
 
-          <!-- Zone Types -->
-          <div class="card">
-            <h2 style="margin-bottom:8px;">
-              <span>Zone Types</span>
-              <button type="button" id="add-type" class="btn btn-outline" style="height:34px;">+ Add Type</button>
-            </h2>
+              <!-- Management forms (render exactly once) -->
+              <div id="management-forms" style="display:none;">
+                {{ types_formset.management_form }}
+                {{ alerts_formset.management_form }}
+              </div>
 
-            <div id="types-area">
-               {% csrf_token %}
-              {% for form in types_formset.forms %}
-                <div class="type-block" data-type-index="{{ forloop.counter0 }}">
-                  <strong>Type #{{ forloop.counter }}</strong>
-                  <div style="margin-top:6px;">
-                     {% csrf_token %}
-                    {{ form.name.label_tag }} {{ form.name }}
-                    {% if form.id %}{{ form.id }}{% endif %}
-                    {% if form.DELETE %}{{ form.DELETE }}{% endif %}
-                    {% if form.non_field_errors %}<div class="message error">{{ form.non_field_errors }}</div>{% endif %}
-                    {% for f in form.visible_fields %}
-                      {% if f.errors %}<div class="message error">{{ f.errors }}</div>{% endif %}
-                    {% endfor %}
-                  </div>
+              <!-- Zone card with action buttons (Clear + Use my location) -->
+              <div class="card">
+                <h2>
+                  <span>Zone</span>
+                  <span class="zone-actions">
+                    <button type="button" id="clearMapBtn" class="btn btn-outline" title="Clear map">Clear</button>
+                    <button type="button" id="locateBtn" class="btn btn-outline" title="Use my location">Use my location</button>
+                  </span>
+                </h2>
 
-                  <div class="alerts-list" id="alerts-for-type-{{ forloop.counter0 }}" style="margin-top:8px;">
-                    <h4 style="margin:0 0 8px 0; display:flex; justify-content:space-between; align-items:center;">
-                      <span>Alerts</span>
-                      <button type="button" class="add-alert btn btn-outline" data-type-index="{{ forloop.counter0 }}" style="height:30px;">+ Add Alert</button>
-                    </h4>
-                    <!-- alerts rows are added client-side -->
-                  </div>
+                <div style="margin-top:10px;">
+                  {% csrf_token %}
+                  {{ zone_form.as_p }}
+                  <!-- optional: hidden field to save polygon points if user draws polygon -->
+                  <input type="hidden" name="zone-polygon_points" id="id_zone-polygon_points" />
                 </div>
-              {% empty %}
-                <!-- empty: no server-side types initially -->
-              {% endfor %}
+
+                
+              </div>
+
+              <!-- Zone Types -->
+              <div class="card">
+                <h2 style="margin-bottom:8px;">
+                  <span>Zone Types</span>
+                  <button type="button" id="add-type" class="btn btn-outline" style="height:34px;">+ Add Type</button>
+                </h2>
+
+                <div id="types-area">
+                  {% csrf_token %}
+                  {% for form in types_formset.forms %}
+                    <div class="type-block" data-type-index="{{ forloop.counter0 }}">
+                      <strong>Type #{{ forloop.counter }}</strong>
+                      <div style="margin-top:6px;">
+                        {% csrf_token %}
+                        {{ form.name.label_tag }} {{ form.name }}
+                        {% if form.id %}{{ form.id }}{% endif %}
+                        {% if form.DELETE %}{{ form.DELETE }}{% endif %}
+                        {% if form.non_field_errors %}<div class="message error">{{ form.non_field_errors }}</div>{% endif %}
+                        {% for f in form.visible_fields %}
+                          {% if f.errors %}<div class="message error">{{ f.errors }}</div>{% endif %}
+                        {% endfor %}
+                      </div>
+
+                      <div class="alerts-list" id="alerts-for-type-{{ forloop.counter0 }}" style="margin-top:8px;">
+                        <h4 style="margin:0 0 8px 0; display:flex; justify-content:space-between; align-items:center;">
+                          <span>Alerts</span>
+                          <button type="button" class="add-alert btn btn-outline" data-type-index="{{ forloop.counter0 }}" style="height:30px;">+ Add Alert</button>
+                        </h4>
+                        <!-- alerts rows are added client-side -->
+                      </div>
+                    </div>
+                  {% empty %}
+                    <!-- empty: no server-side types initially -->
+                  {% endfor %}
+                </div>
+              </div>
+
+              <!-- alerts container (JS appends generated alert rows here) -->
+              <div id="alerts-area" style="display:none;"></div>
+
+              <div style="text-align:right; margin-top:6px;">
+                <button type="submit" class="btn">Save Zone + Types + Alerts</button>
+              </div>
+            </form>
+
+            <!-- Zone Info preview (optional) -->
+            <div id="zoneInfo" class="card" style="display:none; margin-top:12px;">
+              <h2 id="zoneInfoTitle">Zone details</h2>
+              <div id="zoneInfoBody" style="font-size:0.95rem; color:#222;"></div>
+              <div style="margin-top:8px; text-align:right;">
+                <button id="closeZoneInfoBtn" class="btn btn-outline">Close</button>
+              </div>
             </div>
-          </div>
-
-          <!-- alerts container (JS appends generated alert rows here) -->
-          <div id="alerts-area" style="display:none;"></div>
-
-          <div style="text-align:right; margin-top:6px;">
-            <button type="submit" class="btn">Save Zone + Types + Alerts</button>
-          </div>
-        </form>
-
-        <!-- Zone Info preview (optional) -->
-        <div id="zoneInfo" class="card" style="display:none; margin-top:12px;">
-          <h2 id="zoneInfoTitle">Zone details</h2>
-          <div id="zoneInfoBody" style="font-size:0.95rem; color:#222;"></div>
-          <div style="margin-top:8px; text-align:right;">
-            <button id="closeZoneInfoBtn" class="btn btn-outline">Close</button>
           </div>
         </div>
       </div>
@@ -172,6 +224,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 
   <script>
+
   (function () {
     // --- Server-provided constants (rendered by Django) ---
     const TYPES_PREFIX = "{{ types_formset.prefix }}";
@@ -215,7 +268,40 @@
       }
     });
     map.addControl(drawControl);
+function drawCircleFromInputs() {
+  const lat = parseFloat(latField.value);
+  const lng = parseFloat(lngField.value);
+  const radius = parseFloat(radiusField.value);
 
+  if (!isNaN(lat) && !isNaN(lng) && !isNaN(radius)) {
+    // Remove previous layer
+    if (currentLayer) {
+      drawnFG.removeLayer(currentLayer);
+      currentLayer = null;
+    }
+
+    // Create new circle
+    const circle = L.circle([lat, lng], {
+      radius: radius,
+      color: 'red',
+      fillColor: '#f03',
+      fillOpacity: 0.4
+    }).addTo(drawnFG);
+
+    currentLayer = circle;
+
+    // Zoom to circle
+    map.fitBounds(circle.getBounds());
+  } else {
+    console.log("Coordinates or radius not ready yet:", { lat, lng, radius });
+  }
+}
+
+// Example: trigger when inputs change
+latField.addEventListener('input', drawCircleFromInputs);
+lngField.addEventListener('input', drawCircleFromInputs);
+radiusField.addEventListener('input', drawCircleFromInputs);
+  
     // helper to set values into form fields (name-based)
     function setZoneFields(lat, lng, radius) {
       if (latField) latField.value = (lat === '' ? '' : Number(lat).toFixed(6));

@@ -1,11 +1,163 @@
-{% extends 'base.html' %}
-{% load static %}
-{% block title %}Login{% endblock %}
+{% block title %}{% endblock %}
 {% block content %}
-<h2>Police Officer Login</h2>
-<form method="POST">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Login</button>
-</form>
+<style>
+    :root{
+        --bg-1: linear-gradient(180deg,#eef2ff 0%, #f8fafc 100%);
+        --card-bg: #ffffff;
+        --accent: #2b6cff; /* blue accent */
+        --muted: #617085;
+        --radius: 14px;
+        --shadow: 0 10px 30px rgba(17,24,39,0.06);
+    }
+    body { background: var(--bg-1); }
+    .login-wrap{ min-height:74vh; display:flex; align-items:center; justify-content:center; padding:56px 24px; }
+    .login-card{ width:100%; max-width:980px; display:flex; gap:34px; align-items:stretch; background:var(--card-bg); border-radius:calc(var(--radius) + 4px); box-shadow:0 18px 48px rgba(17,24,39,0.08); overflow:hidden; }
+    .login-visual{ flex:1.15; background:linear-gradient(135deg, rgba(43,108,255,0.12), rgba(6,214,197,0.06)); padding:48px; display:flex; flex-direction:column; gap:16px; justify-content:center; }
+    .brand { display:flex; gap:12px; align-items:center; }
+    .brand .logo{ width:72px; height:72px; border-radius:14px; background:var(--accent); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:1.05rem; box-shadow:0 10px 30px rgba(43,108,255,0.18); }
+    .brand h3{ margin:0; color:#0b1530; font-size:1.6rem; }
+    .brand p{ margin:0; color:var(--muted); }
+    .visual-list{ margin-top:6px; color:var(--muted); font-size:0.95rem; }
+
+    .login-form{ flex:1; padding:36px 48px; display:flex; flex-direction:column; gap:20px; }
+    .login-form h2{ margin:0; color:#0b1530; font-size:1.6rem; }
+    .login-form p.lead{ margin:0; color:var(--muted); font-size:1rem; }
+
+    form.form-card{ display:flex; flex-direction:column; gap:14px; margin-top:10px; }
+    .field{ display:flex; flex-direction:column; gap:6px; }
+    label{ font-weight:600; color:#0b1530; font-size:0.95rem; }
+    input[type=text], input[type=password]{ padding:14px 16px; border-radius:12px; border:1px solid #e6eef9; background:#fbfdff; transition:box-shadow .15s ease, transform .08s ease; font-size:1.05rem; }
+    input:focus{ box-shadow:0 10px 30px rgba(43,108,255,0.06); transform:translateY(-2px); outline:none; border-color:var(--accent); }
+    .input-row{ display:flex; gap:8px; align-items:center; }
+    .show-pass{ margin-left:auto; background:transparent; border:0; color:var(--accent); cursor:pointer; font-weight:600; }
+
+    .actions{ display:flex; gap:14px; align-items:center; margin-top:10px; }
+    .btn{ padding:12px 18px; border-radius:12px; border:0; cursor:pointer; font-weight:800; color:#fff; background:var(--accent); box-shadow:0 12px 28px rgba(43,108,255,0.14); transition:transform .12s ease, box-shadow .12s ease; font-size:1rem; }
+    .btn:hover{ transform:translateY(-3px); }
+    .btn.secondary{ background:transparent; color:var(--accent); border:1px solid rgba(43,108,255,0.14); box-shadow:none; padding:10px 16px; font-weight:700; }
+
+    .helper{ color:var(--muted); font-size:0.88rem; }
+    .error{ color:#b91c1c; font-weight:600; }
+
+    /* small animated icon row */
+    .stats{ display:flex; gap:12px; margin-top:18px; }
+    .stat{ background:rgba(255,255,255,0.6); border-radius:10px; padding:10px 12px; box-shadow:inset 0 -1px 0 rgba(15,23,42,0.02); color:var(--muted); font-weight:700; }
+
+    @media (max-width:1000px){ .login-card{ flex-direction:column; } .login-visual{ order:2 } }
+    /* subtle focus pulse */
+    .pulse{ animation: pulse 2.8s ease-in-out infinite; }
+    @keyframes pulse{ 0%{ transform:scale(1); opacity:1 } 50%{ transform:scale(1.02); opacity:0.9 } 100%{ transform:scale(1); opacity:1 } }
+
+    /* small floating label effect - progressive enhancement */
+    .floating{ position:relative; }
+    .floating label{ position:absolute; left:14px; top:10px; font-size:0.82rem; color:var(--muted); transition:transform .12s ease, font-size .12s ease; pointer-events:none; }
+    .floating input:not(:placeholder-shown) + label, .floating input:focus + label{ transform:translateY(-28px); font-size:0.78rem; color:var(--accent); }
+
+</style>
+
+<div class="login-wrap">
+    <div class="login-card" role="main" aria-labelledby="loginTitle">
+        <div class="login-visual">
+            <div class="brand">
+                <div class="logo">SP</div>
+                <div>
+                    <h3>SafeTour Police</h3>
+                    <p>Tourist safety monitoring — Aizawl City</p>
+                </div>
+            </div>
+            <div class="visual-list">
+                <p>Quick actions:</p>
+                <ul style="margin:6px 0 0 18px; color:var(--muted)">
+                    <li>Manage zones and alerts</li>
+                    <li>Live incident feed</li>
+                    <li>Officer dashboard access</li>
+                </ul>
+            </div>
+            <div class="stats">
+                <div class="stat">Zones: <strong>—</strong></div>
+                <div class="stat">Alerts: <strong>—</strong></div>
+            </div>
+        </div>
+
+        <div class="login-form">
+            <div>
+                <h2 id="loginTitle">Police Officer Login</h2>
+                <p class="lead">Sign in with your officer credentials to manage zones and monitor tourist safety.</p>
+            </div>
+
+            <form method="POST" class="form-card" novalidate id="loginForm">
+                {% csrf_token %}
+                <!-- preserve existing form rendering but wrapped for styling -->
+                <div class="field">
+                    <!-- keep the form field output but target input styling via selectors -->
+                    {{ form.police_id }}
+                </div>
+                <div class="field">
+                    {{ form.password }}
+                </div>
+
+                <div class="actions">
+                    <button type="submit" class="btn" id="submitBtn">Login</button>
+                    <button type="button" class="btn secondary" id="cancelBtn">Cancel</button>
+                </div>
+
+                <div class="helper">If you forgot your password contact department admin.</div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Enhance the existing Django-generated inputs for consistent styling and add small interactions
+    (function(){
+        const form = document.getElementById('loginForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+
+        // find inputs by name (Django default field names)
+        const username = form.querySelector('input[name="police_id"]') || form.querySelector('input[name="username"]');
+        const password = form.querySelector('input[name="password"]');
+
+        // add classes and placeholders if not present
+        if(username){ username.classList.add('input-text'); username.setAttribute('placeholder','Police ID'); }
+        if(password){ password.classList.add('input-text'); password.setAttribute('placeholder','Password'); password.setAttribute('autocomplete','current-password'); }
+
+        // show / hide on double-click of password field
+        if(password){
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'show-pass';
+            toggle.textContent = 'Show';
+            toggle.addEventListener('click', function(){
+                if(password.type === 'password'){ password.type = 'text'; toggle.textContent = 'Hide'; }
+                else { password.type = 'password'; toggle.textContent = 'Show'; }
+            });
+            password.parentNode.appendChild(toggle);
+        }
+
+        // basic client-side validation and submit animation
+        form.addEventListener('submit', function(ev){
+            // quick validation
+            const u = username && username.value.trim();
+            const p = password && password.value.trim();
+            if(!u || !p){
+                ev.preventDefault();
+                // simple feedback
+                const err = document.createElement('div'); err.className = 'error'; err.textContent = 'Please enter your Police ID and password.';
+                // remove existing errors
+                const old = form.querySelector('.error'); if(old) old.remove();
+                form.insertBefore(err, form.firstChild);
+                return false;
+            }
+            // show loading state on button
+            submitBtn.disabled = true; submitBtn.textContent = 'Signing in...';
+        });
+
+        cancelBtn.addEventListener('click', function(){ history.back(); });
+
+        // accessibility: focus first input
+        if(username) username.focus();
+    })();
+</script>
+
 {% endblock %}
