@@ -1,11 +1,99 @@
-{% extends 'base.html' %}
 {% load static %}
-{% block title %}Register{% endblock %}
+{% block title %}Register — SafeTour{% endblock %}
 {% block content %}
-<h2>Register as Police Officer</h2>
-<form method="POST">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Register</button>
-</form>
+<style>
+    /* reuse login styles but slightly tweaked for register */
+    :root{ --bg-1: linear-gradient(180deg,#eef2ff 0%, #f8fafc 100%); --card-bg:#fff; --accent:#2b6cff; --muted:#617085; }
+    body{ background:var(--bg-1); }
+    .reg-wrap{ min-height:74vh; display:flex; align-items:center; justify-content:center; padding:56px 24px; }
+    .reg-card{ width:100%; max-width:980px; display:flex; gap:34px; align-items:stretch; background:var(--card-bg); border-radius:16px; box-shadow:0 18px 48px rgba(17,24,39,0.06); overflow:hidden; }
+    .reg-visual{ flex:1.1; background:linear-gradient(135deg, rgba(43,108,255,0.12), rgba(6,214,197,0.06)); padding:48px; display:flex; flex-direction:column; gap:16px; justify-content:center; }
+    .reg-form{ flex:1; padding:36px 48px; display:flex; flex-direction:column; gap: 18px; }
+    input[type=text], input[type=password], input[type=email]{ padding:12px 14px; border-radius:12px; border:1px solid #e6eef9; background:#fbfdff; }
+    .field input{ width:100%; box-sizing:border-box; }
+    .field:last-of-type { margin-bottom:8px; }
+    .field .error-text{ color:#b91c1c; font-weight:700; font-size:0.92rem; margin-top:6px; }
+    .actions{ display:flex; gap:16px; margin-top:18px; }
+    .btn{ padding:12px 18px; border-radius:12px; border:0; cursor:pointer; font-weight:800; color:#fff; background:var(--accent); }
+    .muted{ color:var(--muted); }
+    @media (max-width:1000px){ .reg-card{ flex-direction:column; } }
+</style>
+
+<div class="reg-wrap">
+    <div class="reg-card" role="main" aria-labelledby="regTitle">
+        <div class="reg-visual">
+            <div style="font-weight:800; font-size:1.2rem;">Welcome to SafeTour Police</div>
+            <div class="muted">Create an officer account to manage zones, alerts and monitor tourist safety in real-time.</div>
+            <ul style="margin:10px 0 0 18px; color:var(--muted)">
+                <li>Manage zone alerts</li>
+                <li>Live tourist tracking</li>
+                <li>Officer dashboard</li>
+            </ul>
+        </div>
+
+        <div class="reg-form">
+            <div>
+                <h2 id="regTitle">Create Police Officer Account</h2>
+                <p class="muted">Please fill in the details below. After registering you'll be automatically signed in.</p>
+            </div>
+
+            <form method="POST" id="regForm" class="form-card" novalidate>
+                {% csrf_token %}
+                <div class="field">
+                    <label>Full name</label>
+                    {{ form.name }}
+                    {{ form.name.errors }}
+                </div>
+                <div class="field">
+                    <label>Police ID</label>
+                    {{ form.police_id }}
+                    {{ form.police_id.errors }}
+                </div>
+                <div class="field">
+                    <label>Email</label>
+                    {{ form.email }}
+                    {{ form.email.errors }}
+                </div>
+                <div class="field">
+                    <label>Password</label>
+                    {{ form.password }}
+                    {{ form.password.errors }}
+                </div>
+                <div class="field">
+                    <label>Confirm password</label>
+                    {{ form.confirm_password }}
+                    {{ form.confirm_password.errors }}
+                </div>
+
+                <div class="actions">
+                    <button type="submit" class="btn" id="regSubmit">Create account</button>
+                    <a href="/login/" class="btn" style="background:#fff; color:var(--accent); border:1px solid rgba(43,108,255,0.12); text-decoration:none; display:inline-flex; align-items:center; justify-content:center; padding:10px 14px;">Back to login</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function(){
+        const form = document.getElementById('regForm');
+        const submit = document.getElementById('regSubmit');
+        form.addEventListener('submit', function(ev){
+            const name = form.querySelector('input[name="name"]');
+            const police = form.querySelector('input[name="police_id"]');
+            const pw1 = form.querySelector('input[name="password"]');
+            const pw2 = form.querySelector('input[name="confirm_password"]');
+            // basic validation
+            let err = null;
+            if(!name || !name.value.trim()) err = 'Please enter full name.';
+            else if(!police || !police.value.trim()) err = 'Please enter Police ID.';
+            else if(!pw1 || !pw1.value) err = 'Please enter password.';
+            else if(!pw2 || !pw2.value) err = 'Please confirm password.';
+            else if(pw1.value !== pw2.value) err = 'Passwords do not match.';
+            if(err){ ev.preventDefault(); const e = document.querySelector('.form-error'); if(e) e.remove(); const d = document.createElement('div'); d.className='form-error'; d.style.color='#b91c1c'; d.style.fontWeight='700'; d.innerText = err; form.insertBefore(d, form.firstChild); return false; }
+            submit.disabled = true; submit.innerText = 'Creating...';
+        });
+    })();
+</script>
+
 {% endblock %}

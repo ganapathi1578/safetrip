@@ -697,7 +697,21 @@ async function showTouristDetails(userId) {
           </ul>
         ` : `<div style="color:#666; font-size:13px;">No trips for current itinerary</div>`}
       </div>
+      <div style="border-top:1px solid #eee; padding-top:8px; margin-top:8px; display:flex; gap:8px; align-items:center;">
+        <a href="/tourist/map/${encodeURIComponent(t.userid || '')}/" target="_blank" class="btn" id="liveTrackBtn" style="text-decoration:none; display:inline-block;">Live track</a>
+        <button class="btn" id="centerOnTouristBtn">Center on current</button>
+      </div>
     `;
+    // center button behavior: fly to latest location if available
+    const centerBtn = document.getElementById('centerOnTouristBtn');
+    if(centerBtn && data.latest_location){
+      centerBtn.addEventListener('click', ()=>{
+        try{
+          const ll = data.latest_location;
+          if(ll && ll.latitude != null && ll.longitude != null){ map.flyTo([ll.latitude, ll.longitude], 15, {duration:0.6}); }
+        }catch(e){ console.warn(e); }
+      });
+    } else if(centerBtn){ centerBtn.style.display = 'none'; }
   } catch (err) {
     console.error('showTouristDetails error', err);
     const panel = document.getElementById("detailsContent");

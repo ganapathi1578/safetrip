@@ -225,6 +225,14 @@
       const locations = [];
     {% endif %}
 
+  // tourist id passed from view (string or empty)
+  const touristId = "{{ tourist_id|default:''|escapejs }}";
+
+    // live polling interval id
+    let liveInterval = null;
+    // last timestamp tracked (ISO string)
+    let lastTimestamp = locations.length ? locations[locations.length-1].timestamp : null;
+
     function buildTrail(){
       clearTrail();
       if(!locations || locations.length === 0) return;
@@ -270,6 +278,41 @@
     // initial build
     buildTrail();
     if(trailLayer) map.fitBounds(trailLayer.getBounds(), { padding: [40,40] });
+
+    // live update: fetch latest location for this tourist and append/update trail
+    async function fetchLatestForTourist(){
+      if(!touristId) return;
+      try{
+        const res = await fetch(`/api/tourists/latest/?tourist_id=${encodeURIComponent(touristId)}`);
+        if(!res.ok) return;
+        const json = await res.json();
+        if(!json.tourists || !json.tourists.length) return;
+        const lt = json.tourists[0];
+        if(!lt || !lt.latitude || !lt.longitude) return;
+        // if timestamp is same as lastTimestamp, just update blinking marker position
+        if(lt.timestamp === lastTimestamp){
+          // update blinking marker position
+          if(blinkingMarker){ try{ blinkingMarker.setLatLng([lt.latitude, lt.longitude]); blinkingMarker.getPopup() && blinkingMarker.getPopup().setContent(`<div style="font-weight:700">Current • ${escapeHtml(lt.timestamp)}</div><div style="color:#9fb9c9">Lat: ${lt.latitude}, Lng: ${lt.longitude}</div>`); }catch(e){} }
+          return;
+        }
+        // new timestamp -> push to locations
+        lastTimestamp = lt.timestamp;
+        locations.push({lat: parseFloat(lt.latitude), lng: parseFloat(lt.longitude), timestamp: lt.timestamp});
+        // rebuild trail (cheap but safe)
+        buildTrail();
+        if(trailLayer) map.fitBounds(trailLayer.getBounds(), { padding: [40,40] });
+      }catch(e){ console.warn('fetchLatestForTourist err', e); }
+    }
+
+    // start polling every 5 seconds if touristId present
+    if(touristId){
+      // stagger initial fetch slightly to avoid race with initial template data
+      setTimeout(()=>{ fetchLatestForTourist(); }, 800);
+      liveInterval = setInterval(fetchLatestForTourist, 5000);
+      // clear interval when page is hidden/unloaded to save resources
+      window.addEventListener('beforeunload', ()=> { if(liveInterval) clearInterval(liveInterval); });
+      document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ if(liveInterval) clearInterval(liveInterval); } else { if(!liveInterval) liveInterval = setInterval(fetchLatestForTourist, 5000); } });
+    }
 
     // ----- UI: time list click handler -----
     const list = document.getElementById('timeList');

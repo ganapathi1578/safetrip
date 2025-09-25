@@ -14,9 +14,17 @@ def register_view(request):
         form = PoliceOfficerRegistrationForm(request.POST)
         if form.is_valid():
             officer = form.save(commit=False)
+            # ensure password is hashed via set_password if form provides raw password
+            raw_pw = getattr(form, 'cleaned_data', {}).get('password')
+            if raw_pw:
+                # PoliceOfficer.save() already hashes the password if it's raw
+                # (see models.PoliceOfficer.save), so just assign and save.
+                officer.password = raw_pw
             officer.save()
-            messages.success(request, "Registration successful! You can now log in.")
-            return redirect("login")
+            # auto-login: set session and redirect to home
+            request.session["police_officer_id"] = officer.id
+            messages.success(request, "Registration successful — welcome!")
+            return redirect("home")
     else:
         form = PoliceOfficerRegistrationForm()
     return render(request, "dept/register.html", {"form": form})
@@ -52,7 +60,8 @@ def logout_view(request):
 
 
 def home_view(request):
-    return render(request, "base.html")
+    # Render the SafeTour map/home template (map + controls)
+    return render(request, "dept/home.html")
 
 from django.shortcuts import render, redirect
 from django.contrib import messages
@@ -355,22 +364,40 @@ def api_tourists_latest(request):
 
     Optional query params: none (could add pagination)
     """
+    # support optional ?tourist_id=... to return only that tourist's latest location
+    tourist_id = request.GET.get('tourist_id')
+
     latest_ts = TouristLocation.objects.filter(tourist=OuterRef("pk")).order_by("-timestamp")
     annot = Tourist.objects.annotate(latest_lat=Subquery(latest_ts.values("latitude")[:1]),
                                       latest_lng=Subquery(latest_ts.values("longitude")[:1]),
                                       latest_time=Subquery(latest_ts.values("timestamp")[:1]))
 
     tourists = []
+    if tourist_id:
+        try:
+            t = annot.get(userid=tourist_id)
+        except Tourist.DoesNotExist:
+            return JsonResponse({"tourists": []})
+        if t.latest_lat and t.latest_lng:
+            return JsonResponse({"tourists": [{
+                "tourist_id": t.userid,
+                "name": t.name,
+                "latitude": float(t.latest_lat),
+                "longitude": float(t.latest_lng),
+                "timestamp": t.latest_time.isoformat() if t.latest_time else None,
+            }]})
+        return JsonResponse({"tourists": []})
+
     for t in annot:
         if t.latest_lat and t.latest_lng:
             tourists.append({
                 "tourist_id": t.userid,
-                "userid": t.userid,
                 "name": t.name,
                 "latitude": float(t.latest_lat),
                 "longitude": float(t.latest_lng),
                 "timestamp": t.latest_time.isoformat() if t.latest_time else None,
             })
+
     return JsonResponse({"tourists": tourists})
 
 
@@ -445,7 +472,20 @@ def get_tourist_details(request,userid):
             for trip in current_itinerary.trips.all().order_by("start_time")
         ]
 
+    # attach latest known location (if any)
+    try:
+        latest_loc = TouristLocation.objects.filter(tourist=tourist).order_by('-timestamp').first()
+        if latest_loc:
+            data['latest_location'] = {
+                'latitude': float(latest_loc.latitude),
+                'longitude': float(latest_loc.longitude),
+                'timestamp': latest_loc.timestamp.isoformat() if latest_loc.timestamp else None,
+            }
+    except Exception:
+        data['latest_location'] = None
+
     return JsonResponse(data, safe=False)
+
 
 def tourist_map_view(request,tourist_id):
     #tourist_id = request.GET.get('tourist_id')

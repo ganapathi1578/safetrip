@@ -87,18 +87,37 @@
 
             <form method="POST" class="form-card" novalidate id="loginForm">
                 {% csrf_token %}
+                {# server-side messages (login success/failure) #}
+                {% if messages %}
+                <div id="serverMessages">
+                    {% for message in messages %}
+                        <div class="error">{{ message }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {# show form-level errors if any #}
+                {% if form.non_field_errors %}
+                    <div class="error">{{ form.non_field_errors }}</div>
+                {% endif %}
                 <!-- preserve existing form rendering but wrapped for styling -->
                 <div class="field">
                     <!-- keep the form field output but target input styling via selectors -->
                     {{ form.police_id }}
+                    {% if form.police_id.errors %}
+                        <div class="error">{{ form.police_id.errors }}</div>
+                    {% endif %}
                 </div>
                 <div class="field">
                     {{ form.password }}
+                    {% if form.password.errors %}
+                        <div class="error">{{ form.password.errors }}</div>
+                    {% endif %}
                 </div>
 
                 <div class="actions">
                     <button type="submit" class="btn" id="submitBtn">Login</button>
                     <button type="button" class="btn secondary" id="cancelBtn">Cancel</button>
+                    <a href="/register/" class="btn" style="background:transparent; color:var(--accent); border:1px solid rgba(43,108,255,0.12); padding:10px 12px; font-weight:700; text-decoration:none;">Register now</a>
                 </div>
 
                 <div class="helper">If you forgot your password contact department admin.</div>
@@ -160,4 +179,4 @@
     })();
 </script>
 
-{% endblock %}
+    {% endblock %}
